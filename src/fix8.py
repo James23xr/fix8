@@ -5,6 +5,7 @@
 #          Agnes Li
 #          Najam Tariq
 #          Ricky Peng (contributed to a previous version)
+#          James Fei-Baffoe
 #
 #
 # URL: https://github.com/nalmadi/fix8
@@ -61,6 +62,7 @@ from .outlier_metrics_dialog import OutlierMetricsDialog
 from .eyelink_csv_dialog import EyelinkDialog
 from .state import Fix8State, History
 from . import ui_main_window
+from .model import Fix8Model
 
 # from PySide2 import QtWidgets
 # from PyQt5 import QtWidgets
@@ -70,48 +72,12 @@ import platform
 
 class Fix8():
     def __init__(self):
-        # fields relating to the stimulus
-        self.image_file_path = None
+        # Instantiate the pure data model layer
+        self.model = Fix8Model()
 
-        # fields relating to the trial folder
-        self.folder_path = None
-        self.trial_path = None
-        self.trial_name = None
-
-        # fields relating to fixations
-        self.eye_events = None   # dataframe of eye events
-        
         # for drawing fixations and saccades
         self.fixation_points = None
         self.saccade_lines = None
-
-        self.current_fixation = -1          # progress bar
-        self.suggested_corrections = None   # corrected fixations
-
-        # filed for tool undo/redo using memento pattern and state class
-        self.state_history = History()
-
-        # fields relating to AOIs
-        self.aoi, self.background_color = None, None
-
-        # fields relating to the correction algorithm
-        self.algorithm = "manual"
-        self.algorithm_function = None
-        self.secondary_algorithm_function = None
-        self.suggested_corrections, self.suggested_fixation = None, None
-
-        # keeps track of how many times file was saved so duplicates can be saved instead of overriding previous save file
-        self.timer_start = 0  # beginning time of trial
-        self.metadata = ""
-
-        # fields relating to the drag and drop system
-        self.selected_fixation = None           # clicked fixation
-        self.xy = None
-        self.locked_x = False    
-
-        # fields relating to aoi margin
-        self.aoi_width = 7
-        self.aoi_height = 4
 
         # fields relating to color filters
         self.fixation_color = "red"
@@ -150,45 +116,45 @@ class Fix8():
             return
 
         # clear history for undo
-        self.state_history = History()
+        self.model.state_history = History()
 
         # get aoi from the image
-        self.aoi, self.background_color = mini_emtk.EMTK_find_aoi(
-            self.image_file_path,
-            margin_height=self.aoi_height,
-            margin_width=self.aoi_width,
+        self.model.aoi, self.model.background_color = mini_emtk.EMTK_find_aoi(
+            self.model.image_file_path,
+            margin_height=self.model.aoi_height,
+            margin_width=self.model.aoi_width,
         )
 
         # generate fixations
-        generated_fixations = np.array(mini_emtk.generate_fixations_left(self.aoi, dispersion))
+        generated_fixations = np.array(mini_emtk.generate_fixations_left(self.model.aoi, dispersion))
 
-        self.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
-        self.eye_events["eye_event"] = "fixation"
+        self.model.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
+        self.model.eye_events["eye_event"] = "fixation"
         self.ui.relevant_buttons("trial_clicked")
 
-        #self.read_json_fixations(self.trial_path)
-        self.suggested_corrections = None
+        #self.read_json_fixations(self.model.trial_path)
+        self.model.suggested_corrections = None
         # double clicking trial should show all and make the current fixation the last one
-        self.current_fixation = (len(generated_fixations)-1)  
+        self.model.current_fixation = (len(generated_fixations)-1)  
 
         # set the progress bar to the amount of fixations found
         self.ui.progress_bar.setMaximum(len(generated_fixations) - 1)
-        self.timer_start = time.time()
-        self.metadata = "Generated fixations,," + str(time.time()) + "\n"
+        self.model.timer_start = time.time()
+        self.model.metadata = "Generated fixations,," + str(time.time()) + "\n"
 
-        if self.current_fixation is not None:
-            if self.current_fixation == -1:
+        if self.model.current_fixation is not None:
+            if self.model.current_fixation == -1:
                 self.ui.label_progress.setText(f"0/{len(generated_fixations)}")
             else:
                 self.ui.label_progress.setText(
-                    f"{self.current_fixation}/{len(generated_fixations)}"
+                    f"{self.model.current_fixation}/{len(generated_fixations)}"
                 )
 
         # corrected fixations will be the current fixations on the screen and in the data
         self.save_state()
         self.ui.checkbox_show_fixations.setChecked(True)
         self.ui.checkbox_show_saccades.setChecked(True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.status_text =" Generated synthetic data"
         self.ui.statusBar.showMessage(self.status_text)
         self.update_trial_statistics()
@@ -204,44 +170,44 @@ class Fix8():
             return
 
         # clear history for undo
-        self.state_history = History()
+        self.model.state_history = History()
 
         # get aoi from the image
-        self.aoi, self.background_color = mini_emtk.EMTK_find_aoi(
-            self.image_file_path,
-            margin_height=self.aoi_height,
-            margin_width=self.aoi_width,
+        self.model.aoi, self.model.background_color = mini_emtk.EMTK_find_aoi(
+            self.model.image_file_path,
+            margin_height=self.model.aoi_height,
+            margin_width=self.model.aoi_width,
         )
         
         # generate fixations
-        generated_fixations = np.array(mini_emtk.generate_fixations_left_skip(self.aoi, approximate_letter_width, lam, k_value))
-        self.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
-        self.eye_events["eye_event"] = "fixation"
+        generated_fixations = np.array(mini_emtk.generate_fixations_left_skip(self.model.aoi, approximate_letter_width, lam, k_value))
+        self.model.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
+        self.model.eye_events["eye_event"] = "fixation"
         self.ui.relevant_buttons("trial_clicked")
 
-        #self.read_json_fixations(self.trial_path)
-        self.suggested_corrections = None
+        #self.read_json_fixations(self.model.trial_path)
+        self.model.suggested_corrections = None
         # double clicking trial should show all and make the current fixation the last one
-        self.current_fixation = (len(generated_fixations)-1)  
+        self.model.current_fixation = (len(generated_fixations)-1)  
 
         # set the progress bar to the amount of fixations found
         self.ui.progress_bar.setMaximum(len(generated_fixations) - 1)
-        self.timer_start = time.time()
-        self.metadata = "Generated fixations,," + str(time.time()) + "\n"
+        self.model.timer_start = time.time()
+        self.model.metadata = "Generated fixations,," + str(time.time()) + "\n"
 
-        if self.current_fixation is not None:
-            if self.current_fixation == -1:
+        if self.model.current_fixation is not None:
+            if self.model.current_fixation == -1:
                 self.ui.label_progress.setText(f"0/{len(generated_fixations)}")
             else:
                 self.ui.label_progress.setText(
-                    f"{self.current_fixation}/{len(generated_fixations)}"
+                    f"{self.model.current_fixation}/{len(generated_fixations)}"
                 )
 
         # corrected fixations will be the current fixations on the screen and in the data
         self.save_state()
         self.ui.checkbox_show_fixations.setChecked(True)
         self.ui.checkbox_show_saccades.setChecked(True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.status_text =" Generated synthetic data"
         self.ui.statusBar.showMessage(self.status_text)
         self.update_trial_statistics()
@@ -259,37 +225,37 @@ class Fix8():
             return
 
         # clear history for undo
-        self.state_history = History()
+        self.model.state_history = History()
 
         # get aoi from the image
-        self.aoi, self.background_color = mini_emtk.EMTK_find_aoi(
-            self.image_file_path,
-            margin_height=self.aoi_height,
-            margin_width=self.aoi_width,
+        self.model.aoi, self.model.background_color = mini_emtk.EMTK_find_aoi(
+            self.model.image_file_path,
+            margin_height=self.model.aoi_height,
+            margin_width=self.model.aoi_width,
         )
 
         # generate fixations
-        generated_fixations = np.array(mini_emtk.within_line_regression(self.aoi, probability/10))
-        self.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
-        self.eye_events["eye_event"] = "fixation"
+        generated_fixations = np.array(mini_emtk.within_line_regression(self.model.aoi, probability/10))
+        self.model.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
+        self.model.eye_events["eye_event"] = "fixation"
         self.ui.relevant_buttons("trial_clicked")
 
-        #self.read_json_fixations(self.trial_path)
-        self.suggested_corrections = None
+        #self.read_json_fixations(self.model.trial_path)
+        self.model.suggested_corrections = None
         # double clicking trial should show all and make the current fixation the last one
-        self.current_fixation = (len(generated_fixations)-1)  
+        self.model.current_fixation = (len(generated_fixations)-1)  
 
         # set the progress bar to the amount of fixations found
         self.ui.progress_bar.setMaximum(len(generated_fixations) - 1)
-        self.timer_start = time.time()
-        self.metadata = "Generated fixations,," + str(time.time()) + "\n"
+        self.model.timer_start = time.time()
+        self.model.metadata = "Generated fixations,," + str(time.time()) + "\n"
 
-        if self.current_fixation is not None:
-            if self.current_fixation == -1:
+        if self.model.current_fixation is not None:
+            if self.model.current_fixation == -1:
                 self.ui.label_progress.setText(f"0/{len(generated_fixations)}")
             else:
                 self.ui.label_progress.setText(
-                    f"{self.current_fixation}/{len(generated_fixations)}"
+                    f"{self.model.current_fixation}/{len(generated_fixations)}"
                 )
 
         # corrected fixations will be the current fixations on the screen and in the data
@@ -297,7 +263,7 @@ class Fix8():
         
         self.ui.checkbox_show_fixations.setChecked(True)
         self.ui.checkbox_show_saccades.setChecked(True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.status_text =" Generated synthetic data"
         self.ui.statusBar.showMessage(self.status_text)
         self.update_trial_statistics()
@@ -315,37 +281,37 @@ class Fix8():
             return
 
         # clear history for undo
-        self.state_history = History()
+        self.model.state_history = History()
 
         # get aoi from the image
-        self.aoi, self.background_color = mini_emtk.EMTK_find_aoi(
-            self.image_file_path,
-            margin_height=self.aoi_height,
-            margin_width=self.aoi_width,
+        self.model.aoi, self.model.background_color = mini_emtk.EMTK_find_aoi(
+            self.model.image_file_path,
+            margin_height=self.model.aoi_height,
+            margin_width=self.model.aoi_width,
         )
 
         # generate fixations
-        generated_fixations = np.array(mini_emtk.between_line_regression(self.aoi, probability/10))
-        self.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
-        self.eye_events["eye_event"] = "fixation"
+        generated_fixations = np.array(mini_emtk.between_line_regression(self.model.aoi, probability/10))
+        self.model.eye_events = pd.DataFrame(generated_fixations, columns=["x_cord", "y_cord", "duration"])
+        self.model.eye_events["eye_event"] = "fixation"
         self.ui.relevant_buttons("trial_clicked")
 
-        #self.read_json_fixations(self.trial_path)
-        self.suggested_corrections = None
+        #self.read_json_fixations(self.model.trial_path)
+        self.model.suggested_corrections = None
         # double clicking trial should show all and make the current fixation the last one
-        self.current_fixation = (len(generated_fixations)-1)  
+        self.model.current_fixation = (len(generated_fixations)-1)  
 
         # set the progress bar to the amount of fixations found
         self.ui.progress_bar.setMaximum(len(generated_fixations) - 1)
-        self.timer_start = time.time()
-        self.metadata = "Generated fixations,," + str(time.time()) + "\n"
+        self.model.timer_start = time.time()
+        self.model.metadata = "Generated fixations,," + str(time.time()) + "\n"
 
-        if self.current_fixation is not None:
-            if self.current_fixation == -1:
+        if self.model.current_fixation is not None:
+            if self.model.current_fixation == -1:
                 self.ui.label_progress.setText(f"0/{len(generated_fixations)}")
             else:
                 self.ui.label_progress.setText(
-                    f"{self.current_fixation}/{len(generated_fixations)}"
+                    f"{self.model.current_fixation}/{len(generated_fixations)}"
                 )
 
         # corrected fixations will be the current fixations on the screen and in the data
@@ -353,7 +319,7 @@ class Fix8():
         
         self.ui.checkbox_show_fixations.setChecked(True)
         self.ui.checkbox_show_saccades.setChecked(True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.status_text =" Generated synthetic data"
         self.ui.statusBar.showMessage(self.status_text)
         self.update_trial_statistics()
@@ -370,23 +336,10 @@ class Fix8():
         if not ok:
             return
 
-        self.metadata += (
-            "generate,noise "
-            + str(threshold)
-            + ","
-            + str(time.time())
-            + "\n"
-        )
-        self.save_state()
+        self.model.apply_noise(threshold)
 
-        self.eye_events["x_cord"] = self.eye_events["x_cord"] + np.random.normal(0, threshold, self.eye_events.shape[0])
-        self.eye_events["y_cord"] = self.eye_events["y_cord"] + np.random.normal(0, threshold, self.eye_events.shape[0])
-
-        if self.algorithm != "manual" and self.suggested_corrections is not None:
-            self.suggested_corrections[:, 0] = self.eye_events["x_cord"]
-
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation, draw=True)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation, draw=True)
         
 
     def generate_slope(self):
@@ -400,24 +353,10 @@ class Fix8():
         if not ok:
             return
 
-        self.metadata += (
-            "generate,slope "
-            + str(threshold)
-            + ","
-            + str(time.time())
-            + "\n"
-        )
-        self.save_state()
+        self.model.apply_slope(threshold)
 
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
-        fixations = np.array(mini_emtk.error_droop(threshold, original_fixations))
-
-        self.eye_events["x_cord"] = fixations[:, 0]
-        self.eye_events["y_cord"] = fixations[:, 1]
-        self.eye_events["duration"] = fixations[:, 2]
-
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation, draw=True)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation, draw=True)
 
 
     def generate_offset(self):
@@ -431,23 +370,10 @@ class Fix8():
         if not ok:
             return
 
-        self.metadata += (
-            "generate,offset "
-            + str(threshold)
-            + ","
-            + str(time.time())
-            + "\n"
-        )
-        self.save_state()
+        self.model.apply_offset(threshold)
 
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
-        fixations = np.array(mini_emtk.error_offset(threshold, original_fixations))
-        self.eye_events["x_cord"] = fixations[:, 0]
-        self.eye_events["y_cord"] = fixations[:, 1]
-        self.eye_events["duration"] = fixations[:, 2]
-
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation, draw=True)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation, draw=True)
 
 
     def generate_shift(self):
@@ -461,47 +387,24 @@ class Fix8():
         if not ok:
             return
 
-        self.metadata += (
-            "generate,shift "
-            + str(threshold)
-            + ","
-            + str(time.time())
-            + "\n"
-        )
-        self.save_state()
+        self.model.apply_shift(threshold)
 
-        # get aoi from the image
-        self.aoi, self.background_color = mini_emtk.EMTK_find_aoi(
-            self.image_file_path,
-            margin_height=self.aoi_height,
-            margin_width=self.aoi_width,
-        )
-
-        # get line_Y from aoi
-        line_Y = mini_emtk.find_lines_y(self.aoi)
-
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
-        fixations = np.array(mini_emtk.error_shift(threshold, line_Y, original_fixations))
-        self.eye_events["x_cord"] = fixations[:, 0]
-        self.eye_events["y_cord"] = fixations[:, 1]
-        self.eye_events["duration"] = fixations[:, 2]
-
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation, draw=True)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation, draw=True)
 
 
     def calculate_fixation_report(self):
         # get save file name
         qfd = QFileDialog()
-        default_file_name = self.trial_path.replace('.json', '') + '_fixation_report.csv'
+        default_file_name = self.model.trial_path.replace('.json', '') + '_fixation_report.csv'
         file_name, _ = qfd.getSaveFileName(self.ui, "Save Fixations Report", default_file_name)
 
         if file_name == "":
             self.show_error_message("Error", "No file selected")
             return
 
-        # get fixations from self.eye_events dataframe, filter by eye_event == "fixation"
-        fixation_data = self.eye_events[self.eye_events["eye_event"] == "fixation"]
+        # get fixations from self.model.eye_events dataframe, filter by eye_event == "fixation"
+        fixation_data = self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]
 
         fixation_data.to_csv(file_name, index=False)
 
@@ -509,15 +412,15 @@ class Fix8():
     def calculate_saccade_report(self):
         # get save file name
         qfd = QFileDialog()
-        default_file_name = self.trial_path.replace('.json', '') + '_saccade_report.csv'
+        default_file_name = self.model.trial_path.replace('.json', '') + '_saccade_report.csv'
         file_name, _ = qfd.getSaveFileName(self.ui, "Save Saccades Report", default_file_name)
 
         if file_name == "":
             self.show_error_message("Error", "No file selected")
             return
 
-        # get saccades from self.eye_events dataframe, filter by eye_event == "saccade"
-        saccade_data = self.eye_events[self.eye_events["eye_event"] == "saccade"]
+        # get saccades from self.model.eye_events dataframe, filter by eye_event == "saccade"
+        saccade_data = self.model.eye_events[self.model.eye_events["eye_event"] == "saccade"]
 
         saccade_data.to_csv(file_name, index=False)
 
@@ -536,15 +439,15 @@ class Fix8():
         
         # get save file name
         qfd = QFileDialog()
-        default_file_name = self.trial_path.replace('.json', '') + '_AOI_report.csv'
+        default_file_name = self.model.trial_path.replace('.json', '') + '_AOI_report.csv'
         file_name, _ = qfd.getSaveFileName(self.ui, "Save AOI Report", default_file_name)
 
         if file_name == "":
             self.show_error_message("Error", "No file selected")
             return
         
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
-        hit_test_data = mini_emtk.hit_test(original_fixations, self.trial_path, self.aoi, radius=radius)
+        original_fixations = np.array(self.model.eye_events[['x_cord', 'y_cord', 'duration']])
+        hit_test_data = mini_emtk.hit_test(original_fixations, self.model.trial_path, self.model.aoi, radius=radius)
     
         # write hit test data to file
         hit_test_data.to_csv(file_name, index=False)
@@ -564,7 +467,7 @@ class Fix8():
         
         # get save file name
         qfd = QFileDialog()
-        default_file_name = self.trial_path.replace('.json', '') + '_AOI_metrics.csv'
+        default_file_name = self.model.trial_path.replace('.json', '') + '_AOI_metrics.csv'
         file_name, _ = qfd.getSaveFileName(self.ui, "Save AOI Metrics Report", default_file_name)
 
         if file_name == "":
@@ -572,8 +475,8 @@ class Fix8():
             return
         
         # run hit test
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
-        hit_test_data = mini_emtk.hit_test(original_fixations, self.trial_path, self.aoi, radius=radius)
+        original_fixations = np.array(self.model.eye_events[['x_cord', 'y_cord', 'duration']])
+        hit_test_data = mini_emtk.hit_test(original_fixations, self.model.trial_path, self.model.aoi, radius=radius)
 
         single_fixation_duration = []
         first_fixation_duration = []
@@ -581,11 +484,11 @@ class Fix8():
         total_time = []
         fixation_count = []
 
-        eye_metrics_data = self.aoi.copy()
+        eye_metrics_data = self.model.aoi.copy()
 
-        for index, row in self.aoi.iterrows():
+        for index, row in self.model.aoi.iterrows():
             # get part and line from row index
-            token_line_part = self.aoi.loc[index, "name"]
+            token_line_part = self.model.aoi.loc[index, "name"]
             line = int(token_line_part.split(" ")[1])
             part = int(token_line_part.split(" ")[3])
 
@@ -731,7 +634,7 @@ class Fix8():
         if not ok:
             return
 
-        self.metadata += (
+        self.model.metadata += (
             "filter,removed fixations X standard deviations away from the mean "
             + str(threshold)
             + ","
@@ -741,90 +644,90 @@ class Fix8():
         self.save_state()
 
         # get mean duration and standard deviation
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
+        original_fixations = np.array(self.model.eye_events[['x_cord', 'y_cord', 'duration']])
         mean = np.mean(original_fixations[:, 2])
         std = np.std(original_fixations[:, 2])
 
         # remove fixations X standard deviations away from the mean
-        self.eye_events = self.eye_events[((self.eye_events["duration"] - mean) / std) < threshold]
+        self.model.eye_events = self.model.eye_events[((self.model.eye_events["duration"] - mean) / std) < threshold]
 
-        self.current_fixation = 0
+        self.model.current_fixation = 0
 
         # update suggested corrections 
-        if self.algorithm != "manual" and self.suggested_corrections is not None:
-            if self.current_fixation == len(self.eye_events):
-                self.current_fixation = len(self.eye_events) - 1
+        if self.model.algorithm != "manual" and self.model.suggested_corrections is not None:
+            if self.model.current_fixation == len(self.model.eye_events):
+                self.model.current_fixation = len(self.model.eye_events) - 1
 
-            self.suggested_corrections = self.suggested_corrections[self.suggested_corrections[:, 2] < mean + threshold * std]
+            self.model.suggested_corrections = self.model.suggested_corrections[self.model.suggested_corrections[:, 2] < mean + threshold * std]
 
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation, draw=True)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation, draw=True)
         self.update_trial_statistics()
 
 
     def undo(self):
         ''' implement undo using memento pattern and state class ''' 
-        if not self.state_history.is_empty():
+        if not self.model.state_history.is_empty():
             
             at_max = False
             # check if progressbar is at end of progressbar range
             if self.ui.progress_bar.value() == self.ui.progress_bar.maximum():
                 at_max = True
              
-            fix8_state = self.state_history.get_state()
-            self.eye_events, self.suggested_corrections, self.current_fixation, self.selected_fixation = fix8_state.get_state()
+            fix8_state = self.model.state_history.get_state()
+            self.model.eye_events, self.model.suggested_corrections, self.model.current_fixation, self.model.selected_fixation = fix8_state.get_state()
 
             # update progress bar
-            self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
+            self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
 
-            if self.current_fixation >= len(self.eye_events) or at_max:
-                self.current_fixation = len(self.eye_events) - 1
+            if self.model.current_fixation >= len(self.model.eye_events) or at_max:
+                self.model.current_fixation = len(self.model.eye_events) - 1
 
-            self.progress_bar_updated(self.current_fixation, draw=True)
+            self.progress_bar_updated(self.model.current_fixation, draw=True)
             self.update_trial_statistics()
 
 
     def save_state(self):
 
         current_state = Fix8State(
-            self.eye_events,
-            self.suggested_corrections,
-            self.current_fixation,
-            self.selected_fixation,
+            self.model.eye_events,
+            self.model.suggested_corrections,
+            self.model.current_fixation,
+            self.model.selected_fixation,
         )
-        self.state_history.set_state(current_state)
+        self.model.state_history.set_state(current_state)
 
 
     def outside_screen_filter(self):
-        self.metadata += "filter,removed fixations outside screen," + str(time.time()) + "\n"
+        self.model.metadata += "filter,removed fixations outside screen," + str(time.time()) + "\n"
 
-        # get image dimentions from self.image_file_path
-        image = mpimg.imread(self.image_file_path)
+        # get image dimentions from self.model.image_file_path
+        image = mpimg.imread(self.model.image_file_path)
         screen_width = image.shape[1]
         screen_height = image.shape[0]
 
         self.save_state()
 
-        self.eye_events = self.eye_events[
-            (self.eye_events["x_cord"] >= 0)
-            & (self.eye_events["x_cord"] <= screen_width)
-            & (self.eye_events["y_cord"] >= 0)
-            & (self.eye_events["y_cord"] <= screen_height)
+        self.model.eye_events = self.model.eye_events[
+            (self.model.eye_events["x_cord"] >= 0)
+            & (self.model.eye_events["x_cord"] <= screen_width)
+            & (self.model.eye_events["y_cord"] >= 0)
+            & (self.model.eye_events["y_cord"] <= screen_height)
         ]
 
-        if self.algorithm != "manual" and self.suggested_corrections is not None:
-            self.suggested_corrections = self.suggested_corrections[
-                (self.suggested_corrections[:, 0] >= 0)
-                & (self.suggested_corrections[:, 0] <= screen_width)
-                & (self.suggested_corrections[:, 1] >= 0)
-                & (self.suggested_corrections[:, 1] <= screen_height)
+        if self.model.algorithm != "manual" and self.model.suggested_corrections is not None:
+            self.model.suggested_corrections = self.model.suggested_corrections[
+                (self.model.suggested_corrections[:, 0] >= 0)
+                & (self.model.suggested_corrections[:, 0] <= screen_width)
+                & (self.model.suggested_corrections[:, 1] >= 0)
+                & (self.model.suggested_corrections[:, 1] <= screen_height)
             ]
 
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation)
 
         self.draw_canvas(draw_all=True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.update_trial_statistics()
 
 
@@ -839,7 +742,7 @@ class Fix8():
         if not ok:
             return
 
-        self.metadata += (
+        self.model.metadata += (
             "filter,removed fixations less than "
             + str(threshold)
             + ","
@@ -848,20 +751,20 @@ class Fix8():
         )
         self.save_state()
 
-        self.eye_events = self.eye_events[self.eye_events["duration"] > int(threshold)]
-        self.current_fixation = 0
+        self.model.eye_events = self.model.eye_events[self.model.eye_events["duration"] > int(threshold)]
+        self.model.current_fixation = 0
 
-        if self.algorithm != "manual" and self.suggested_corrections is not None:
-            if self.current_fixation == len(self.eye_events):
-                self.current_fixation = len(self.eye_events) - 1
+        if self.model.algorithm != "manual" and self.model.suggested_corrections is not None:
+            if self.model.current_fixation == len(self.model.eye_events):
+                self.model.current_fixation = len(self.model.eye_events) - 1
 
-            self.suggested_corrections = self.suggested_corrections[self.suggested_corrections[:, 2] > int(threshold)]
+            self.model.suggested_corrections = self.model.suggested_corrections[self.model.suggested_corrections[:, 2] > int(threshold)]
 
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation)
 
         self.draw_canvas(draw_all=True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.update_trial_statistics()
 
 
@@ -876,7 +779,7 @@ class Fix8():
         if not ok:
             return
 
-        self.metadata += (
+        self.model.metadata += (
             "filter,removed fixations greater than "
             + str(threshold)
             + ","
@@ -886,20 +789,20 @@ class Fix8():
 
         self.save_state()
 
-        self.eye_events = self.eye_events[self.eye_events["duration"] < int(threshold)]
-        self.current_fixation = 0
+        self.model.eye_events = self.model.eye_events[self.model.eye_events["duration"] < int(threshold)]
+        self.model.current_fixation = 0
 
-        if self.algorithm != "manual" and self.suggested_corrections is not None:
-            if self.current_fixation == len(self.eye_events):
-                self.current_fixation = len(self.eye_events) - 1
+        if self.model.algorithm != "manual" and self.model.suggested_corrections is not None:
+            if self.model.current_fixation == len(self.model.eye_events):
+                self.model.current_fixation = len(self.model.eye_events) - 1
 
-            self.suggested_corrections = self.suggested_corrections[self.suggested_corrections[:, 2] < int(threshold)]
+            self.model.suggested_corrections = self.model.suggested_corrections[self.model.suggested_corrections[:, 2] < int(threshold)]
 
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation)
 
         self.draw_canvas(draw_all=True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.update_trial_statistics()
 
 
@@ -920,7 +823,7 @@ class Fix8():
             return
     
         # write metadata
-        self.metadata += (
+        self.model.metadata += (
             "filter,merge fixations less than "
             + str(duration_threshold)
             + ", dispersion_threshold"
@@ -933,7 +836,7 @@ class Fix8():
         self.save_state()
 
         # merge fixations
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
+        original_fixations = np.array(self.model.eye_events[['x_cord', 'y_cord', 'duration']])
         new_fixations = list(original_fixations).copy()
         index = 0
         while index < len(new_fixations) - 1:
@@ -947,20 +850,20 @@ class Fix8():
             else:
                 index += 1
 
-        self.eye_events = pd.DataFrame(new_fixations, columns=["x_cord", "y_cord", "duration"])
-        self.eye_events["eye_event"] = "fixation"
+        self.model.eye_events = pd.DataFrame(new_fixations, columns=["x_cord", "y_cord", "duration"])
+        self.model.eye_events["eye_event"] = "fixation"
 
-        if self.algorithm != "manual" and self.suggested_corrections is not None:
+        if self.model.algorithm != "manual" and self.model.suggested_corrections is not None:
             self.run_correction()
 
-        if self.current_fixation >= len(self.eye_events):
-            self.current_fixation = len(self.eye_events) - 1
+        if self.model.current_fixation >= len(self.model.eye_events):
+            self.model.current_fixation = len(self.model.eye_events) - 1
 
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.progress_bar_updated(self.current_fixation)
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.progress_bar_updated(self.model.current_fixation)
 
         self.draw_canvas(draw_all=True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.update_trial_statistics()
 
 
@@ -1005,42 +908,42 @@ class Fix8():
 
     def run_correction(self):
 
-        original_fixations = np.array(self.eye_events[['x_cord', 'y_cord', 'duration']])
+        original_fixations = np.array(self.model.eye_events[['x_cord', 'y_cord', 'duration']])
         fixation_XY = original_fixations
         fixation_XY = fixation_XY[:, 0:2]
         fixation_XY = np.array(fixation_XY)
-        line_Y = mini_emtk.find_lines_y(self.aoi)
+        line_Y = mini_emtk.find_lines_y(self.model.aoi)
         line_Y = np.array(line_Y)
-        word_XY = mini_emtk.find_word_centers(self.aoi)
+        word_XY = mini_emtk.find_word_centers(self.model.aoi)
         word_XY = np.array(word_XY)
-        self.suggested_corrections = original_fixations
+        self.model.suggested_corrections = original_fixations
 
         # run algorithm, warp uses word_xy, others use line_Y
-        if "warp" not in self.algorithm:
-            self.suggested_corrections[:, 0:2] = self.algorithm_function(fixation_XY, line_Y)
+        if "warp" not in self.model.algorithm:
+            self.model.suggested_corrections[:, 0:2] = self.model.algorithm_function(fixation_XY, line_Y)
         
-        elif "+" in self.algorithm:
+        elif "+" in self.model.algorithm:
             # hybrid
-            self.suggested_corrections[:, 0:2] = self.algorithm_function(fixation_XY, line_Y, word_XY, self.secondary_algorithm_function)
+            self.model.suggested_corrections[:, 0:2] = self.model.algorithm_function(fixation_XY, line_Y, word_XY, self.model.secondary_algorithm_function)
 
         else:
             # warp
-            self.suggested_corrections[:, 0:2] = self.algorithm_function(fixation_XY, word_XY)
+            self.model.suggested_corrections[:, 0:2] = self.model.algorithm_function(fixation_XY, word_XY)
         
-        self.status_text = self.algorithm + " Algorithm Selected"
+        self.status_text = self.model.algorithm + " Algorithm Selected"
         self.ui.statusBar.showMessage(self.status_text)
         self.ui.relevant_buttons("algorithm_selected")
 
 
     def run_algorithm(self, algorithm_name, algorithm_function, mode, secondery_algorithm_function=None):
 
-        self.algorithm = algorithm_name
-        self.algorithm_function = algorithm_function
-        self.secondary_algorithm_function = secondery_algorithm_function
+        self.model.algorithm = algorithm_name
+        self.model.algorithm_function = algorithm_function
+        self.model.secondary_algorithm_function = secondery_algorithm_function
         self.run_correction()
 
         # write metadata
-        self.metadata += ("selected, algorithm " + str(self.algorithm) + "," + str(time.time()) + "\n")
+        self.model.metadata += ("selected, algorithm " + str(self.model.algorithm) + "," + str(time.time()) + "\n")
 
         if mode == 'semi':
             # show suggestion
@@ -1061,14 +964,14 @@ class Fix8():
 
 
     def manual_correction(self):
-        self.algorithm_function = None
-        self.secondary_algorithm_function = None
-        self.algorithm = "manual"
+        self.model.algorithm_function = None
+        self.model.secondary_algorithm_function = None
+        self.model.algorithm = "manual"
 
         # write metadata
-        self.metadata += ("selected, " + str(self.algorithm) + "," + str(time.time()) + "\n")
+        self.model.metadata += ("selected, " + str(self.model.algorithm) + "," + str(time.time()) + "\n")
 
-        self.suggested_corrections = None
+        self.model.suggested_corrections = None
         
         # hide suggestion
         self.ui.checkbox_show_suggestion.setEnabled(False)
@@ -1083,15 +986,15 @@ class Fix8():
         """
         if self.fixation_points is not None:
 
-            self.xy = np.asarray(self.fixation_points.get_offsets())
-            xyt = self.ui.canvas.ax.transData.transform(self.xy)
+            self.model.xy = np.asarray(self.fixation_points.get_offsets())
+            xyt = self.ui.canvas.ax.transData.transform(self.model.xy)
             xt, yt = xyt[:, 0], xyt[:, 1]
             d = np.sqrt((xt - event.x) ** 2 + (yt - event.y) ** 2)
-            #self.selected_fixation = d.argmin()
+            #self.model.selected_fixation = d.argmin()
 
             for fixation_index in range(len(d)): 
 
-                duration = self.eye_events.loc[fixation_index, "duration"]
+                duration = self.model.eye_events.loc[fixation_index, "duration"]
                 #epsilon = 11  # diameter range
                 area = self.fixation_size * (duration / 50) ** 2
 
@@ -1105,37 +1008,37 @@ class Fix8():
                 scale_factor = 1.75 if platform.system() == 'Darwin' else 0.91
 
                 if d[fixation_index] < epsilon * scale_factor:
-                    self.selected_fixation = fixation_index
-                    return self.selected_fixation
+                    self.model.selected_fixation = fixation_index
+                    return self.model.selected_fixation
             
             return None
 
 
     def move_left_selected_fixation(self):
-        if self.selected_fixation != None:
+        if self.model.selected_fixation != None:
             self.save_state()
-            self.eye_events.loc[self.selected_fixation, "x_cord"] -= 2
+            self.model.eye_events.loc[self.model.selected_fixation, "x_cord"] -= 2
 
         self.draw_canvas()
 
     def move_right_selected_fixation(self):
-        if self.selected_fixation != None:
+        if self.model.selected_fixation != None:
             self.save_state()
-            self.eye_events.loc[self.selected_fixation, "x_cord"] += 2
+            self.model.eye_events.loc[self.model.selected_fixation, "x_cord"] += 2
 
         self.draw_canvas()
 
     def move_down_selected_fixation(self):
-        if self.selected_fixation != None:
+        if self.model.selected_fixation != None:
             self.save_state()
-            self.eye_events.loc[self.selected_fixation, "y_cord"] += 2
+            self.model.eye_events.loc[self.model.selected_fixation, "y_cord"] += 2
 
         self.draw_canvas()
 
     def move_up_selected_fixation(self):
-        if self.selected_fixation != None:
+        if self.model.selected_fixation != None:
             self.save_state()
-            self.eye_events.loc[self.selected_fixation, "y_cord"] -= 2
+            self.model.eye_events.loc[self.model.selected_fixation, "y_cord"] -= 2
 
         self.draw_canvas()
 
@@ -1144,27 +1047,27 @@ class Fix8():
             return
         if event.button != 1:
             return
-        self.selected_fixation = self.get_selected_fixation(event)
-        # print(self.selected_fixation)
+        self.model.selected_fixation = self.get_selected_fixation(event)
+        # print(self.model.selected_fixation)
 
 
     def button_release_callback(self, event):
         """when released the fixation after a move, update the fixations"""
 
-        if self.selected_fixation is not None:
+        if self.model.selected_fixation is not None:
             
             # write metadata
-            self.metadata += (
+            self.model.metadata += (
                 "manual_moving, fixation "
-                + str(self.selected_fixation)
+                + str(self.model.selected_fixation)
                 + " moved from x:"
-                + str(self.eye_events.loc[self.selected_fixation, "x_cord"])
+                + str(self.model.eye_events.loc[self.model.selected_fixation, "x_cord"])
                 + " y:"
-                + str(self.eye_events.loc[self.selected_fixation, "y_cord"])
+                + str(self.model.eye_events.loc[self.model.selected_fixation, "y_cord"])
                 + " to x:"
-                + str(self.xy[self.selected_fixation][0])
+                + str(self.model.xy[self.model.selected_fixation][0])
                 + " y:"
-                + str(self.xy[self.selected_fixation][1])
+                + str(self.model.xy[self.model.selected_fixation][1])
                 + ","
                 + str(time.time())
                 + "\n"
@@ -1172,10 +1075,10 @@ class Fix8():
             self.save_state()
 
             # move fixation
-            self.eye_events.loc[self.selected_fixation, ["x_cord", "y_cord"]] = self.xy[self.selected_fixation]
+            self.model.eye_events.loc[self.model.selected_fixation, ["x_cord", "y_cord"]] = self.model.xy[self.model.selected_fixation]
 
             # update correction based on algorithm
-            if self.algorithm != "manual" and self.algorithm is not None:
+            if self.model.algorithm != "manual" and self.model.algorithm is not None:
                 self.run_correction()
 
             #if self.ui.checkbox_show_saccades.isChecked():
@@ -1183,14 +1086,14 @@ class Fix8():
 
         if event.button != 1:
             return
-        # self.selected_fixation = None
+        # self.model.selected_fixation = None
         self.quick_draw_canvas()
 
 
     def motion_notify_callback(self, event):
         ''' called when fixation is being dragged '''
         
-        if self.selected_fixation is None:
+        if self.model.selected_fixation is None:
             return
         if event.inaxes is None:
             return
@@ -1199,12 +1102,12 @@ class Fix8():
 
         x, y = event.xdata, event.ydata
 
-        #self.xy = np.asarray(self.scatter.get_offsets())
-        if self.locked_x:
-            self.xy[self.selected_fixation] = np.array([self.eye_events.loc[self.selected_fixation, "x_cord"], y])
+        #self.model.xy = np.asarray(self.scatter.get_offsets())
+        if self.model.locked_x:
+            self.model.xy[self.model.selected_fixation] = np.array([self.model.eye_events.loc[self.model.selected_fixation, "x_cord"], y])
         else:
-            self.xy[self.selected_fixation] = np.array([x, y])
-        #self.scatter.set_offsets(self.xy)
+            self.model.xy[self.model.selected_fixation] = np.array([x, y])
+        #self.scatter.set_offsets(self.model.xy)
         # self.ui.canvas.draw_idle()
 
         self.ui.canvas.restore_region(self.ui.canvas.background)
@@ -1215,11 +1118,11 @@ class Fix8():
 
     def lock_x_axis(self):
         
-        if self.locked_x:
-            self.locked_x = False
+        if self.model.locked_x:
+            self.model.locked_x = False
             self.ui.lock_x_axis_action.setText("Lock X Axis")
         else:
-            self.locked_x = True
+            self.model.locked_x = True
             self.ui.lock_x_axis_action.setText("Unlock X Axis")
 
         pass
@@ -1245,70 +1148,70 @@ class Fix8():
 
         # a: next is 65
         if e.key() == 65 and self.ui.button_next_fixation.isEnabled():
-            self.metadata += "key,next," + str(time.time()) + "\n"
+            self.model.metadata += "key,next," + str(time.time()) + "\n"
             #self.next_fixation()
             print('a pressed')
             self.assign_fixation_above()
 
         # z: back is 90
         if e.key() == 90 and self.ui.button_previous_fixation.isEnabled():
-            self.metadata += "key,previous," + str(time.time()) + "\n"
+            self.model.metadata += "key,previous," + str(time.time()) + "\n"
             #self.previous_fixation()
             self.assign_fixation_below()
 
         # spacebar: accept and next is 32
-        if e.key() == 32 and self.algorithm_function != None:
-            self.metadata += "key,accept suggestion," + str(time.time()) + "\n"
+        if e.key() == 32 and self.model.algorithm_function != None:
+            self.model.metadata += "key,accept suggestion," + str(time.time()) + "\n"
             self.confirm_suggestion()
 
         # backspace
         if e.key() == 16777219:
-            self.metadata += "key,remove fixation," + str(time.time()) + "\n"
+            self.model.metadata += "key,remove fixation," + str(time.time()) + "\n"
             self.remove_fixation()
 
         # if a number is pressed, call assign_fixation_to_line
         if e.key() in range(48, 58):
-            self.metadata += "key" + e.key() + ",assign fixation to line," + str(time.time()) + "\n"
+            self.model.metadata += "key" + e.key() + ",assign fixation to line," + str(time.time()) + "\n"
             self.assign_fixation_to_line(e.key() - 48)
 
 
     def assign_fixation_to_line(self, line_number):
 
         # find the closest line above the current fixation
-        if self.aoi is not None:
+        if self.model.aoi is not None:
             
-            line_Y = mini_emtk.find_lines_y(self.aoi)
+            line_Y = mini_emtk.find_lines_y(self.model.aoi)
 
             if line_number-1 >= len(line_Y):
                 return
             
             assigned_line_y = line_Y[line_number-1]
 
-            self.eye_events.loc[self.current_fixation, "y_cord"] = assigned_line_y
+            self.model.eye_events.loc[self.model.current_fixation, "y_cord"] = assigned_line_y
             self.quick_draw_canvas(all_fixations=False)
             self.next_fixation()
             self.save_state()
 
 
     def remove_fixation(self):
-        if self.eye_events is not None and self.selected_fixation is not None:
-                if self.selected_fixation < len(self.eye_events):
+        if self.model.eye_events is not None and self.model.selected_fixation is not None:
+                if self.model.selected_fixation < len(self.model.eye_events):
                     self.save_state()
 
-                    self.eye_events = self.eye_events.drop(self.selected_fixation)
-                    self.eye_events = self.eye_events.reset_index(drop=True)
-                    self.current_fixation -= 1
+                    self.model.eye_events = self.model.eye_events.drop(self.model.selected_fixation)
+                    self.model.eye_events = self.model.eye_events.reset_index(drop=True)
+                    self.model.current_fixation -= 1
 
-                    self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-                    self.progress_bar_updated(self.current_fixation, draw=False)
+                    self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+                    self.progress_bar_updated(self.model.current_fixation, draw=False)
 
-                    if self.suggested_corrections is not None and len(self.suggested_corrections) > 0:
-                        self.suggested_corrections = np.delete(self.suggested_corrections, self.selected_fixation, 0)  # delete the row of selected fixation
+                    if self.model.suggested_corrections is not None and len(self.model.suggested_corrections) > 0:
+                        self.model.suggested_corrections = np.delete(self.model.suggested_corrections, self.model.selected_fixation, 0)  # delete the row of selected fixation
 
-                    self.selected_fixation = None
+                    self.model.selected_fixation = None
 
                     self.draw_canvas()
-                    self.progress_bar_updated(self.current_fixation, draw=False)
+                    self.progress_bar_updated(self.model.current_fixation, draw=False)
 
 
     def show_error_message(self, window_title, message):
@@ -1321,10 +1224,10 @@ class Fix8():
     def open_trial_folder(self):
         """open trial folder, display it to trial list window with list of JSON trials"""
         qfd = QFileDialog()
-        self.folder_path = qfd.getExistingDirectory(self.ui, "Select Folder")
+        self.model.folder_path = qfd.getExistingDirectory(self.ui, "Select Folder")
 
         # --- make sure a folder was actually chosen, otherwise just cancel ---
-        if self.folder_path != "":
+        if self.model.folder_path != "":
             # clear the data since a new folder was open, no trial is chosen at this point
             self.ui.trial_list.clear()
             self.clear_fixations()
@@ -1332,10 +1235,10 @@ class Fix8():
 
             # when open a new folder, block off all the relevant buttons that shouldn't be accesible until a trial is clicked
             self.ui.relevant_buttons("opened_folder")
-            self.status_text = "Trial Folder Opened: " + self.folder_path
+            self.status_text = "Trial Folder Opened: " + self.model.folder_path
             self.ui.statusBar.showMessage(self.status_text)
 
-            files = listdir(self.folder_path)
+            files = listdir(self.model.folder_path)
 
             image_file = ""
 
@@ -1343,14 +1246,14 @@ class Fix8():
                 self.file_list = []
                 for file in files:
                     if file.endswith(".json") or file.endswith(".csv") and file.endswith("_AOI.csv") == False and file.endswith("_hit_test.csv") == False:
-                        self.file_list.append(self.folder_path + "/" + file)
+                        self.file_list.append(self.model.folder_path + "/" + file)
 
                     elif (file.endswith(".png")
                         or file.endswith(".jpeg")
                         or file.endswith(".jpg")):
                         if image_file == "":  # only get the first image found
-                            image_file = self.folder_path + "/" + file
-                            self.image_file_path = self.folder_path + "/" + file
+                            image_file = self.model.folder_path + "/" + file
+                            self.model.image_file_path = self.model.folder_path + "/" + file
                 
                 if len(self.file_list) > 0:
                     # add the files to the trial list window
@@ -1388,10 +1291,10 @@ class Fix8():
 
     def open_image(self):
         qfd = QFileDialog()
-        self.image_file_path = qfd.getOpenFileName(self.ui, "Select Image", "", "Image Files (*.png *.jpg *.jpeg)")[0]
+        self.model.image_file_path = qfd.getOpenFileName(self.ui, "Select Image", "", "Image Files (*.png *.jpg *.jpeg)")[0]
 
-        if self.image_file_path != "":
-            self.set_canvas_image(self.image_file_path)
+        if self.model.image_file_path != "":
+            self.set_canvas_image(self.model.image_file_path)
             self.find_aoi()
             self.ui.relevant_buttons("opened_stimulus")
             self.ui.canvas.draw_idle()
@@ -1405,59 +1308,59 @@ class Fix8():
 
     def open_trial(self):
         qfd = QFileDialog()
-        self.trial_path = qfd.getOpenFileName(self.ui, "Select Trial file", "", "CSV or Json (*.csv *.json)")[0]
+        self.model.trial_path = qfd.getOpenFileName(self.ui, "Select Trial file", "", "CSV or Json (*.csv *.json)")[0]
 
-        if self.trial_path == "":
+        if self.model.trial_path == "":
             self.show_error_message("Error", "No file selected")
             return
 
-        if self.image_file_path == "":
+        if self.model.image_file_path == "":
             self.show_error_message("Image Error", "No Image Selected")
         
         # reset times saved if a DIFFERENT trial was selected
-        self.trial_name = self.trial_path.split("/")[-1]
+        self.model.trial_name = self.model.trial_path.split("/")[-1]
         
-        if self.trial_path.endswith(".json"):
-            ok = self.read_json_fixations(self.trial_path)
+        if self.model.trial_path.endswith(".json"):
+            ok = self.read_json_fixations(self.model.trial_path)
             if not ok:
-                self.trial_name = None
-                self.trial_path = None
+                self.model.trial_name = None
+                self.model.trial_path = None
                 return
 
-        elif self.trial_path.endswith(".csv"):
-            ok = self.read_csv_fixations(self.trial_path)
+        elif self.model.trial_path.endswith(".csv"):
+            ok = self.read_csv_fixations(self.model.trial_path)
             if not ok:
-                self.trial_name = None
-                self.trial_path = None
+                self.model.trial_name = None
+                self.model.trial_path = None
                 return
         
         # clear history for undo
-        self.state_history = History()
+        self.model.state_history = History()
 
-        self.suggested_corrections = None
-        self.current_fixation = (len(self.eye_events)-1)  
+        self.model.suggested_corrections = None
+        self.model.current_fixation = (len(self.model.eye_events)-1)  
 
         # set the progress bar to the amount of fixations found
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.timer_start = time.time()
-        self.metadata = "started, open trial," + str(time.time()) + "\n"
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.model.timer_start = time.time()
+        self.model.metadata = "started, open trial," + str(time.time()) + "\n"
 
-        if self.current_fixation is not None:
-            if self.current_fixation == -1:
-                self.ui.label_progress.setText(f"0/{len(self.eye_events)}")
+        if self.model.current_fixation is not None:
+            if self.model.current_fixation == -1:
+                self.ui.label_progress.setText(f"0/{len(self.model.eye_events)}")
             else:
                 self.ui.label_progress.setText(
-                    f"{self.current_fixation}/{len(self.eye_events)}"
+                    f"{self.model.current_fixation}/{len(self.model.eye_events)}"
                 )
 
-        fixations = self.eye_events[self.eye_events["eye_event"] == "fixation"]
+        fixations = self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]
         self.save_state()
         self.ui.checkbox_show_fixations.setChecked(True)
         self.ui.checkbox_show_saccades.setChecked(True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.draw_canvas(draw_all=True)
 
-        self.status_text = self.trial_name + " Opened (Default: Manual Mode)"
+        self.status_text = self.model.trial_name + " Opened (Default: Manual Mode)"
         self.ui.statusBar.showMessage(self.status_text)
         self.update_trial_statistics()
 
@@ -1465,31 +1368,31 @@ class Fix8():
     def update_trial_statistics(self):
 
         # eye events has a timestamp column, find the duration of the trial by subtracting the first and last timestamp
-        if self.eye_events is not None and 'time_stamp' in self.eye_events.columns:
-            duration = self.eye_events.iloc[-1]["time_stamp"] - self.eye_events.iloc[0]["time_stamp"]
+        if self.model.eye_events is not None and 'time_stamp' in self.model.eye_events.columns:
+            duration = self.model.eye_events.iloc[-1]["time_stamp"] - self.model.eye_events.iloc[0]["time_stamp"]
             self.ui.statistics_table.setItem(0, 1, QTableWidgetItem(str(duration//1000) + " sec"))
         else:
             self.ui.statistics_table.setItem(0, 1, QTableWidgetItem("-"))
 
         # get maximum fixation duration
-        if self.eye_events is not None:
-            self.ui.statistics_table.setItem(1, 1, QTableWidgetItem(str(np.max(self.eye_events["duration"]))))
+        if self.model.eye_events is not None:
+            self.ui.statistics_table.setItem(1, 1, QTableWidgetItem(str(np.max(self.model.eye_events["duration"]))))
         else:
             self.ui.statistics_table.setItem(1, 1, QTableWidgetItem("-"))
 
         # get minimum fixation duration
-        if self.eye_events is not None:
-            self.ui.statistics_table.setItem(2, 1, QTableWidgetItem(str(np.min(self.eye_events["duration"]))))
+        if self.model.eye_events is not None:
+            self.ui.statistics_table.setItem(2, 1, QTableWidgetItem(str(np.min(self.model.eye_events["duration"]))))
         else:
             self.ui.statistics_table.setItem(2, 1, QTableWidgetItem("-"))
 
         # get the number of aois
-        if self.aoi is not None:
-            self.ui.statistics_table.setItem(3, 1, QTableWidgetItem(str(len(self.aoi))))
+        if self.model.aoi is not None:
+            self.ui.statistics_table.setItem(3, 1, QTableWidgetItem(str(len(self.model.aoi))))
         else:
             self.ui.statistics_table.setItem(3, 1, QTableWidgetItem("-"))
 
-        # if self.current_fixation is not None:
+        # if self.model.current_fixation is not None:
         #self.ui.statistics_table.setHidden(False)
 
 
@@ -1502,17 +1405,17 @@ class Fix8():
             self.show_error_message("Error", "No aoi file selected")
             return
 
-        if self.image_file_path == "":
+        if self.model.image_file_path == "":
             self.show_error_message("Image Error", "No Image Selected")
 
         # open aoi file
-        self.aoi = pd.read_csv(aoi_file)
+        self.model.aoi = pd.read_csv(aoi_file)
         self.save_state()
 
         # draw canvas
         self.draw_canvas()
 
-        self.status_text = self.trial_name + " Opened (Default: Manual Mode)"
+        self.status_text = self.model.trial_name + " Opened (Default: Manual Mode)"
         self.ui.statusBar.showMessage(self.status_text)
         self.update_trial_statistics()
 
@@ -1533,50 +1436,50 @@ class Fix8():
         """
         
         # reset times saved if a DIFFERENT trial was selected
-        self.trial_name = item.text()
-        self.trial_path = self.trials[item.text()]
+        self.model.trial_name = item.text()
+        self.model.trial_path = self.trials[item.text()]
 
-        if self.trial_path.endswith(".json"):
-            ok = self.read_json_fixations(self.trial_path)
+        if self.model.trial_path.endswith(".json"):
+            ok = self.read_json_fixations(self.model.trial_path)
             if not ok:
-                self.trial_name = None
-                self.trial_path = None
+                self.model.trial_name = None
+                self.model.trial_path = None
                 return
 
-        elif self.trial_path.endswith(".csv"):
-            ok = self.read_csv_fixations(self.trial_path)
+        elif self.model.trial_path.endswith(".csv"):
+            ok = self.read_csv_fixations(self.model.trial_path)
             if not ok:
-                self.trial_name = None
-                self.trial_path = None
+                self.model.trial_name = None
+                self.model.trial_path = None
                 return
 
         # clear history for undo
-        self.state_history = History()
+        self.model.state_history = History()
 
-        self.suggested_corrections = None
-        self.current_fixation = (len(self.eye_events)-1)  
+        self.model.suggested_corrections = None
+        self.model.current_fixation = (len(self.model.eye_events)-1)  
 
         # set the progress bar to the amount of fixations found
-        self.ui.progress_bar.setMaximum(len(self.eye_events) - 1)
-        self.timer_start = time.time()
-        self.metadata = "started,," + str(time.time()) + "\n"
+        self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
+        self.model.timer_start = time.time()
+        self.model.metadata = "started,," + str(time.time()) + "\n"
 
-        if self.current_fixation is not None:
-            if self.current_fixation == -1:
-                self.ui.label_progress.setText(f"0/{len(self.eye_events)}")
+        if self.model.current_fixation is not None:
+            if self.model.current_fixation == -1:
+                self.ui.label_progress.setText(f"0/{len(self.model.eye_events)}")
             else:
                 self.ui.label_progress.setText(
-                    f"{self.current_fixation}/{len(self.eye_events)}"
+                    f"{self.model.current_fixation}/{len(self.model.eye_events)}"
                 )
 
-        fixations = self.eye_events[self.eye_events["eye_event"] == "fixation"]
+        fixations = self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]
         self.save_state()
         self.ui.checkbox_show_fixations.setChecked(True)
         self.ui.checkbox_show_saccades.setChecked(True)
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
         self.draw_canvas(draw_all=True)
 
-        self.status_text = self.trial_name + " Opened (Default: Manual Mode)"
+        self.status_text = self.model.trial_name + " Opened (Default: Manual Mode)"
         self.ui.statusBar.showMessage(self.status_text)
         self.update_trial_statistics()
 
@@ -1585,15 +1488,15 @@ class Fix8():
         """find the areas of interest (aoi) for the selected stimulus"""
 
         try:
-            if self.image_file_path != "":
-                self.aoi, self.background_color = mini_emtk.EMTK_find_aoi(
-                    self.image_file_path,
-                    margin_height=self.aoi_height,
-                    margin_width=self.aoi_width,
+            if self.model.image_file_path != "":
+                self.model.aoi, self.model.background_color = mini_emtk.EMTK_find_aoi(
+                    self.model.image_file_path,
+                    margin_height=self.model.aoi_height,
+                    margin_width=self.model.aoi_width,
                 )
         except Exception as e:
             self.show_error_message("AOI Error", "Problem finding AOI: " + str(e))
-            self.aoi = None
+            self.model.aoi = None
 
 
     def json_to_df(self, trial_path):
@@ -1637,13 +1540,13 @@ class Fix8():
         trial_path - the trial file path of the trial clicked on"""
 
         try:
-            self.eye_events = self.json_to_df(trial_path)
+            self.model.eye_events = self.json_to_df(trial_path)
         except:
             self.show_error_message("Trial File Error", "Problem reading json File")     
             return False
         
         # if the fixations are empty, show an error message
-        if len(self.eye_events) == 0:
+        if len(self.model.eye_events) == 0:
             self.show_error_message("Trial File Error", "No Fixations Found")
             return False
         
@@ -1658,10 +1561,10 @@ class Fix8():
 
         try:
             # open the csv file with pandas
-            self.eye_events = pd.read_csv(trial_path)
+            self.model.eye_events = pd.read_csv(trial_path)
             
             # get the fixations from the csv file
-            fixations = self.eye_events[self.eye_events["eye_event"] == "fixation"]
+            fixations = self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]
 
         except:
             self.show_error_message("Trial File Error", "Problem reading CSV File")     
@@ -1714,17 +1617,17 @@ class Fix8():
     # draw fixations2 is similar to the normal draw fixations, excpet this one only draws to the current fixation
     def draw_canvas(self, draw_all=False):
 
-        if self.eye_events is None:
+        if self.model.eye_events is None:
             return
 
         if draw_all:
-            x = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"])
-            y = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"])
-            duration = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["duration"])
+            x = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"])
+            y = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"])
+            duration = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["duration"])
         else:
-            x = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[0 : self.current_fixation + 1])
-            y = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[0 : self.current_fixation + 1])
-            duration = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["duration"].iloc[0 : self.current_fixation + 1])
+            x = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[0 : self.model.current_fixation + 1])
+            y = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[0 : self.model.current_fixation + 1])
+            duration = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["duration"].iloc[0 : self.model.current_fixation + 1])
 
 
         # get rid of the data before updating it
@@ -1755,12 +1658,12 @@ class Fix8():
 
         # draw suggested fixation in blue
         if self.ui.checkbox_show_suggestion.isChecked():
-            if self.current_fixation < len(self.suggested_corrections):
-                x = self.suggested_corrections[self.current_fixation][0]
-                y = self.suggested_corrections[self.current_fixation][1]
-                duration = self.suggested_corrections[self.current_fixation][2]
+            if self.model.current_fixation < len(self.model.suggested_corrections):
+                x = self.model.suggested_corrections[self.model.current_fixation][0]
+                y = self.model.suggested_corrections[self.model.current_fixation][1]
+                duration = self.model.suggested_corrections[self.model.current_fixation][2]
 
-                self.suggested_fixation = self.ui.canvas.ax.scatter(
+                self.model.suggested_fixation = self.ui.canvas.ax.scatter(
                     x,
                     y,
                     s=self.fixation_size * (duration / 50) ** 1.8,
@@ -1770,10 +1673,10 @@ class Fix8():
 
         # draw remaining fixations in grey
         if self.ui.checkbox_show_all_fixations.isChecked():
-            if self.current_fixation < len(self.eye_events):
-                x = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.current_fixation + 1:])
-                y = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation + 1:])
-                duration = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["duration"].iloc[self.current_fixation + 1:])
+            if self.model.current_fixation < len(self.model.eye_events):
+                x = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.model.current_fixation + 1:])
+                y = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation + 1:])
+                duration = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["duration"].iloc[self.model.current_fixation + 1:])
 
                 self.remaining_fixations = self.ui.canvas.ax.scatter(
                     x,
@@ -1793,7 +1696,7 @@ class Fix8():
         if self.ui.checkbox_show_aoi.isChecked():
             color = self.aoi_color 
 
-            for row in self.aoi.iterrows():
+            for row in self.model.aoi.iterrows():
                 xcord = row[1]["x"]
                 ycord = row[1]["y"]
                 height = row[1]["height"]
@@ -1819,7 +1722,7 @@ class Fix8():
         if all_fixations == 2:
             all_fixations = False
 
-        if self.eye_events is None or len(self.eye_events) == 0:
+        if self.model.eye_events is None or len(self.model.eye_events) == 0:
             return
 
         if self.ui.canvas.background is None:
@@ -1829,13 +1732,13 @@ class Fix8():
 
         # figure out which fixations to draw
         if all_fixations:
-            x = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"])
-            y = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"])
-            duration = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["duration"])
+            x = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"])
+            y = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"])
+            duration = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["duration"])
         else:
-            x = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[0 : self.current_fixation + 1])
-            y = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[0 : self.current_fixation + 1])
-            duration = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["duration"].iloc[0 : self.current_fixation + 1])
+            x = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[0 : self.model.current_fixation + 1])
+            y = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[0 : self.model.current_fixation + 1])
+            duration = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["duration"].iloc[0 : self.model.current_fixation + 1])
 
         # draw fixations
         if self.ui.checkbox_show_fixations.isChecked():
@@ -1862,26 +1765,26 @@ class Fix8():
 
         # draw suggested fixation in blue (or selected color)
         if self.ui.checkbox_show_suggestion.isChecked():
-            if self.current_fixation < len(self.suggested_corrections):
-                x = self.suggested_corrections[self.current_fixation][0]
-                y = self.suggested_corrections[self.current_fixation][1]
-                duration = self.eye_events[self.eye_events["eye_event"] == "fixation"]["duration"].iloc[self.current_fixation]
+            if self.model.current_fixation < len(self.model.suggested_corrections):
+                x = self.model.suggested_corrections[self.model.current_fixation][0]
+                y = self.model.suggested_corrections[self.model.current_fixation][1]
+                duration = self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["duration"].iloc[self.model.current_fixation]
 
-                self.suggested_fixation = self.ui.canvas.ax.scatter(
+                self.model.suggested_fixation = self.ui.canvas.ax.scatter(
                     x,
                     y,
                     s=30 * (duration / 50) ** 1.8,
                     alpha=self.fixation_opacity,
                     c=self.suggested_fixation_color,
                 )
-                self.ui.canvas.ax.draw_artist(self.suggested_fixation)
+                self.ui.canvas.ax.draw_artist(self.model.suggested_fixation)
 
         # draw remaining fixations and saccades in grey
         if self.ui.checkbox_show_all_fixations.isChecked():
-            if self.current_fixation < len(self.eye_events):
-                x = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.current_fixation + 1:])
-                y = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation + 1:])
-                duration = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["duration"].iloc[self.current_fixation + 1:])
+            if self.model.current_fixation < len(self.model.eye_events):
+                x = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.model.current_fixation + 1:])
+                y = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation + 1:])
+                duration = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["duration"].iloc[self.model.current_fixation + 1:])
 
                 self.remaining_fixations = self.ui.canvas.ax.scatter(
                     x,
@@ -1893,8 +1796,8 @@ class Fix8():
                 self.ui.canvas.ax.draw_artist(self.remaining_fixations)
 
                 # draw remaining saccades
-                x = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.current_fixation:])
-                y = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation:])
+                x = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.model.current_fixation:])
+                y = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation:])
                 saccade_lines = self.ui.canvas.ax.plot(
                 x, y, alpha=self.saccade_opacity, c=self.remaining_fixation_color, linewidth=self.saccade_line_size
                 )
@@ -1902,7 +1805,7 @@ class Fix8():
 
         # draw aois
         if self.ui.checkbox_show_aoi.isChecked():
-            for row in self.aoi.iterrows():
+            for row in self.model.aoi.iterrows():
 
                 xcord = row[1]["x"]
                 ycord = row[1]["y"]
@@ -1928,14 +1831,14 @@ class Fix8():
     def correct_all_fixations(self):
         """if the user presses the correct all fixations button,
         make the corrected fixations the suggested ones from the correction algorithm"""
-        if self.suggested_corrections is not None:
+        if self.model.suggested_corrections is not None:
             self.save_state()
-            self.eye_events.loc[self.eye_events["eye_event"] == "fixation", ["x_cord", "y_cord"]] = self.suggested_corrections[:, 0:2]
+            self.model.eye_events.loc[self.model.eye_events["eye_event"] == "fixation", ["x_cord", "y_cord"]] = self.model.suggested_corrections[:, 0:2]
 
             #self.draw_canvas()
             self.quick_draw_canvas(all_fixations=True)
 
-        self.metadata += (
+        self.model.metadata += (
             "correct_all, all fixations corrected automatically"
             + ","
             + str(time.time())
@@ -1946,49 +1849,49 @@ class Fix8():
 
 
     def previous_fixation(self):
-        # if self.suggested_corrections is not None:
-        if self.current_fixation != 0:
-            self.current_fixation -= 1
+        # if self.model.suggested_corrections is not None:
+        if self.model.current_fixation != 0:
+            self.model.current_fixation -= 1
 
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
 
 
     def next_fixation(self):
-        if self.current_fixation == -1 and self.eye_events == None:
+        if self.model.current_fixation == -1 and self.model.eye_events == None:
             # Tour
             self.set_canvas_image('src/.images/fix8-keyboard.png')
             self.ui.canvas.draw()
             self.ui.button_next_fixation.setEnabled(False)
             return
         
-        if self.current_fixation != len(self.eye_events) - 1:
-            self.current_fixation += 1
+        if self.model.current_fixation != len(self.model.eye_events) - 1:
+            self.model.current_fixation += 1
 
-        self.progress_bar_updated(self.current_fixation, draw=False)
+        self.progress_bar_updated(self.model.current_fixation, draw=False)
 
 
     def assign_fixation_above(self):
         """assign the fixation to the closest line above the current fixation"""
 
         # find the closest line above the current fixation
-        if self.aoi is not None:
+        if self.model.aoi is not None:
             
-            line_Y = mini_emtk.find_lines_y(self.aoi)
+            line_Y = mini_emtk.find_lines_y(self.model.aoi)
 
             distances = []
             for line in line_Y:
-                current_distance = self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation] - line
+                current_distance = self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation] - line
                 distances.append(current_distance)
 
             closest_line = line_Y[0]
 
             smallest_distance = 9999999
             for index, distance in enumerate(distances):
-                if distance < smallest_distance and line_Y[index] < self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation]:
+                if distance < smallest_distance and line_Y[index] < self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation]:
                     smallest_distance = distance
                     closest_line = line_Y[index]
 
-            self.eye_events.loc[self.current_fixation, "y_cord"] = closest_line
+            self.model.eye_events.loc[self.model.current_fixation, "y_cord"] = closest_line
             self.quick_draw_canvas(all_fixations=False)
             self.next_fixation()
             self.save_state()
@@ -1998,23 +1901,23 @@ class Fix8():
         """assign the fixation to the closest line below the current fixation"""
 
         # find the closest line below the current fixation
-        if self.aoi is not None:
-            line_Y = mini_emtk.find_lines_y(self.aoi)
+        if self.model.aoi is not None:
+            line_Y = mini_emtk.find_lines_y(self.model.aoi)
 
             distances = []
             for line in line_Y:
-                current_distance = abs(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation] - line)
+                current_distance = abs(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation] - line)
                 distances.append(current_distance)
 
             closest_line = line_Y[-1]
 
             smallest_distance = 9999999
             for index, distance in enumerate(distances):
-                if distance < smallest_distance and line_Y[index] > self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation]:
+                if distance < smallest_distance and line_Y[index] > self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation]:
                     smallest_distance = distance
                     closest_line = line_Y[index]
 
-            self.eye_events.loc[self.current_fixation, "y_cord"] = closest_line
+            self.model.eye_events.loc[self.model.current_fixation, "y_cord"] = closest_line
             self.quick_draw_canvas(all_fixations=False)
             self.next_fixation()
             self.save_state()
@@ -2023,30 +1926,30 @@ class Fix8():
     def confirm_suggestion(self):
         """ when the confirm button is clicked, the suggested correction replaces the current fixation"""
 
-        if self.algorithm_function is None:
+        if self.model.algorithm_function is None:
             return
 
-        if self.suggested_corrections is None:
+        if self.model.suggested_corrections is None:
             return
 
-        self.metadata += (
+        self.model.metadata += (
             "auto_moving, fixation "
-            + str(self.current_fixation)
+            + str(self.model.current_fixation)
             + " moved from x:"
-            + str(self.eye_events[self.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.current_fixation])
+            + str(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["x_cord"].iloc[self.model.current_fixation])
             + " y:"
-            + str(self.eye_events[self.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.current_fixation])
+            + str(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["y_cord"].iloc[self.model.current_fixation])
             + " to x:"
-            + str(self.suggested_corrections[self.current_fixation][0])
+            + str(self.model.suggested_corrections[self.model.current_fixation][0])
             + " y:"
-            + str(self.suggested_corrections[self.current_fixation][1])
+            + str(self.model.suggested_corrections[self.model.current_fixation][1])
             + ","
             + str(time.time())
             + "\n"
         )
         self.save_state()
 
-        self.eye_events.loc[self.current_fixation, "y_cord"] = self.suggested_corrections[self.current_fixation][1]
+        self.model.eye_events.loc[self.model.current_fixation, "y_cord"] = self.model.suggested_corrections[self.model.current_fixation][1]
 
         self.quick_draw_canvas(all_fixations=False)
         self.next_fixation()
@@ -2061,15 +1964,15 @@ class Fix8():
 
         with open(metadata_file_path, "w", newline="") as meta_file:
                 meta_file.write(headers)
-                meta_file.write(self.metadata)
-                self.metadata = ""
+                meta_file.write(self.model.metadata)
+                self.model.metadata = ""
 
 
     def save_corrections_json(self):
         """ save correction to a json file and metadata to csv file """
 
         qfd = QFileDialog()
-        default_file_name = self.trial_path.replace('.json', '') + '_CORRECTED.json'
+        default_file_name = self.model.trial_path.replace('.json', '') + '_CORRECTED.json'
         new_correction_file_name, _ = qfd.getSaveFileName(self.ui, "Save correction", default_file_name)
 
         if new_correction_file_name == "":
@@ -2079,17 +1982,17 @@ class Fix8():
         if '.json' not in new_correction_file_name:
             new_correction_file_name += '.json'
 
-        if len(self.eye_events) > 0:
+        if len(self.model.eye_events) > 0:
             
             x_cord = []
             y_cord = []
             duration = []
             time_stamps = []
 
-            fixations = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"][["x_cord", "y_cord", "duration"]]).tolist()
+            fixations = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"][["x_cord", "y_cord", "duration"]]).tolist()
 
-            if 'time_stamp' in self.eye_events.columns:
-                time_stamps = np.array(self.eye_events[self.eye_events["eye_event"] == "fixation"]["time_stamp"]).tolist()
+            if 'time_stamp' in self.model.eye_events.columns:
+                time_stamps = np.array(self.model.eye_events[self.model.eye_events["eye_event"] == "fixation"]["time_stamp"]).tolist()
                 corrected_fixations = {'time_stamps': time_stamps,
                                        'fixations': fixations
                                       }
@@ -2099,14 +2002,14 @@ class Fix8():
             with open(f"{new_correction_file_name}", "w") as f:
                 json.dump(corrected_fixations, f)
                 
-            duration = (time.time() - self.timer_start)
+            duration = (time.time() - self.model.timer_start)
             today = date.today()
 
-            self.metadata += (
+            self.model.metadata += (
                 "Saved,Date "
                 + str(today)
                 + " Trial Name"
-                + str(self.trial_name)
+                + str(self.model.trial_name)
                 + " File Path "
                 + str(new_correction_file_name)
                 + " Duration "
@@ -2127,7 +2030,7 @@ class Fix8():
 
     def save_corrections_csv(self):
         qfd = QFileDialog()
-        default_file_name = self.trial_path.replace('.csv', '') + '_CORRECTED.csv'
+        default_file_name = self.model.trial_path.replace('.csv', '') + '_CORRECTED.csv'
         new_correction_file_name, _ = qfd.getSaveFileName(self.ui, "Save correction", default_file_name)
 
         if new_correction_file_name == "":
@@ -2137,30 +2040,30 @@ class Fix8():
         if '.csv' not in new_correction_file_name:
             new_correction_file_name += '.csv'
 
-        if len(self.eye_events) > 0:
+        if len(self.model.eye_events) > 0:
 
             # add start/end time columns if data has time_stamp
-            if 'time_stamp' in self.eye_events.columns:
+            if 'time_stamp' in self.model.eye_events.columns:
                 start_times = []
                 end_times = []
 
-                for index, row in self.eye_events.iterrows():
+                for index, row in self.model.eye_events.iterrows():
                     start_times.append(row["time_stamp"])
                     end_times.append(row["time_stamp"] + row["duration"])
 
-                self.eye_events["start_time"] = start_times
-                self.eye_events["end_time"] = end_times
+                self.model.eye_events["start_time"] = start_times
+                self.model.eye_events["end_time"] = end_times
 
-            self.eye_events.to_csv(new_correction_file_name, index=False)
+            self.model.eye_events.to_csv(new_correction_file_name, index=False)
                 
-            duration = (time.time() - self.timer_start)
+            duration = (time.time() - self.model.timer_start)
             today = date.today()
 
-            self.metadata += (
+            self.model.metadata += (
                 "Saved,Date "
                 + str(today)
                 + " Trial Name"
-                + str(self.trial_name)
+                + str(self.model.trial_name)
                 + " File Path "
                 + str(new_correction_file_name)
                 + " Duration "
@@ -2181,7 +2084,7 @@ class Fix8():
 
     def save_aoi_csv(self):
         qfd = QFileDialog()
-        default_file_name = self.trial_path.replace('.csv', '').replace('.json', '') + '_AOI.csv'
+        default_file_name = self.model.trial_path.replace('.csv', '').replace('.json', '') + '_AOI.csv'
         new_aoi_file_name, _ = qfd.getSaveFileName(self.ui, "Save AOI", default_file_name)
         
         if new_aoi_file_name == "":
@@ -2191,9 +2094,9 @@ class Fix8():
         if '.csv' not in new_aoi_file_name:
             new_aoi_file_name += '.csv'
 
-        if len(self.eye_events) > 0:
+        if len(self.model.eye_events) > 0:
 
-            self.aoi.to_csv(new_aoi_file_name, index=False)
+            self.model.aoi.to_csv(new_aoi_file_name, index=False)
             self.status_text = "AOI Saved to" + " " + new_aoi_file_name
             self.ui.statusBar.showMessage(self.status_text)
 
@@ -2206,8 +2109,8 @@ class Fix8():
         # dpi is set to 300 for high quality
         qfd = QFileDialog()
 
-        if self.trial_path is not None:
-            default_file_name = self.trial_path.replace('.csv', '').replace('.json', '') + '_FIX8.png'
+        if self.model.trial_path is not None:
+            default_file_name = self.model.trial_path.replace('.csv', '').replace('.json', '') + '_FIX8.png'
         else:
             default_file_name = 'image_Fix8.png'
 
@@ -2236,14 +2139,14 @@ class Fix8():
 
     def progress_bar_updated(self, value, draw=True):
         # update the current suggested correction to the last fixation of the list
-        self.current_fixation = value
+        self.model.current_fixation = value
 
         # update current suggestion to the progress bar
-        if self.current_fixation is not None:
+        if self.model.current_fixation is not None:
             self.ui.label_progress.setText(
-                f"{self.current_fixation}/{len(self.eye_events)-1}"
+                f"{self.model.current_fixation}/{len(self.model.eye_events)-1}"
             )
-            self.ui.progress_bar.setValue(self.current_fixation)
+            self.ui.progress_bar.setValue(self.model.current_fixation)
 
         if draw:
 
@@ -2255,13 +2158,13 @@ class Fix8():
 
 
     def aoi_height_changed(self, value):
-        self.aoi_height = value
+        self.model.aoi_height = value
         self.find_aoi()
         self.quick_draw_canvas()
 
 
     def aoi_width_changed(self, value):
-        self.aoi_width = value
+        self.model.aoi_width = value
         self.find_aoi()
         self.quick_draw_canvas()
 
