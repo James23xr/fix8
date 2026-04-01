@@ -2264,6 +2264,20 @@ class Fix8():
         self.fixation_size = value * 6
         self.draw_canvas()
 
+    def __getattr__(self, name):
+        """Proxy missing attributes (reads) to the internal model layer."""
+        model = super().__getattribute__('model')
+        if hasattr(model, name):
+            return getattr(model, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    def __setattr__(self, name, value):
+        """Proxy modifications (writes) to the internal model layer if they belong there."""
+        if name != 'model' and hasattr(self, 'model') and hasattr(self.model, name):
+            setattr(self.model, name, value)
+        else:
+            super().__setattr__(name, value)
+
 
 def main():
     if platform.system() == "Windows":
