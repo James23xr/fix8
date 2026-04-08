@@ -62,7 +62,7 @@ from .outlier_metrics_dialog import OutlierMetricsDialog
 from .eyelink_csv_dialog import EyelinkDialog
 from .state import Fix8State, History
 from . import ui_main_window
-from .model import Fix8Model
+from .core import Fix8Model
 
 # from PySide2 import QtWidgets
 # from PyQt5 import QtWidgets
