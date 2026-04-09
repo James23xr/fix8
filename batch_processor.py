@@ -11,6 +11,8 @@ def run_batch():
     and exports them to CSV without ever spawning a Qt window.
     """
     print("Initializing Fix8Core Headless Batch Processor...\n")
+    import time
+    start_time = time.time()
     
     # Initialize Engine (Model) without the GUI
     engine = Fix8Core()
@@ -71,7 +73,9 @@ def run_batch():
         engine.eye_events.to_csv(output_path, index=False)
         print(f"   -> Successfully saved exported data to {output_path}")
 
-    print("\nBatch Processing 100% Complete! System Exiting cleanly.")
+    end_time = time.time()
+    print(f"\nBatch Processing 100% Complete! System Exiting cleanly.")
+    print(f"Total time elapsed: {end_time - start_time:.4f} seconds!")
 
 if __name__ == "__main__":
     run_batch()
