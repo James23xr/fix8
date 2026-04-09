@@ -62,7 +62,7 @@ from .outlier_metrics_dialog import OutlierMetricsDialog
 from .eyelink_csv_dialog import EyelinkDialog
 from .state import Fix8State, History
 from . import ui_main_window
-from .model import Fix8Model
+from .core import Fix8Core
 
 # from PySide2 import QtWidgets
 # from PyQt5 import QtWidgets
@@ -73,7 +73,7 @@ import platform
 class Fix8():
     def __init__(self):
         # Instantiate the pure data model layer
-        self.model = Fix8Model()
+        self.model = Fix8Core()
 
         # for drawing fixations and saccades
         self.fixation_points = None
