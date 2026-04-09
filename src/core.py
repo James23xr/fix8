@@ -4,7 +4,7 @@ import time
 from .state import History, Fix8State
 from . import mini_emtk
 
-class Fix8Model:
+class Fix8Core:
     """
     Model class for Fix8.
     Stores and manages purely structural data (Pandas Dataframes, paths, states)
