@@ -9,6 +9,9 @@ class Fix8Visualizer {
         this.offsetY = 0;
         
         this.hoveredIndex = -1;
+        this.isDragging = false;
+        this.draggedIndex = -1;
+        this.onFixationUpdate = null; // Callback for app.js
         
         this._setupEvents();
         this.draw(); // initialize empty state
@@ -119,17 +122,43 @@ class Fix8Visualizer {
     }
     
     _setupEvents() {
-        this.canvas.addEventListener('mousemove', (e) => {
-            if (this.fixations.length === 0) return;
-            
-            // Map screen coordinates to canvas coordinate space
+        const getMousePos = (e) => {
             const rect = this.canvas.getBoundingClientRect();
             const scaleX = this.canvas.width / rect.width;
             const scaleY = this.canvas.height / rect.height;
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY,
+                rawX: e.clientX,
+                rawY: e.clientY
+            };
+        };
+
+        this.canvas.addEventListener('mousedown', (e) => {
+            if (this.hoveredIndex !== -1) {
+                this.isDragging = true;
+                this.draggedIndex = this.hoveredIndex;
+            }
+        });
+
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.fixations.length === 0) return;
+            const pos = getMousePos(e);
             
-            const mouseX = (e.clientX - rect.left) * scaleX;
-            const mouseY = (e.clientY - rect.top) * scaleY;
+            // Handle Dragging
+            if (this.isDragging && this.draggedIndex !== -1) {
+                // Update local visual model immediately for rapid UI response
+                this.fixations[this.draggedIndex].x_cord = pos.x - this.offsetX;
+                this.fixations[this.draggedIndex].y_cord = pos.y - this.offsetY;
+                this.draw();
+                
+                // Hide tooltip while dragging
+                this.tooltip.style.opacity = '0';
+                this.canvas.style.cursor = 'grabbing';
+                return;
+            }
             
+            // Handle Hovering
             let foundIndex = -1;
             
             // Reverse loop to pick the circle drawn last (on top)
@@ -141,8 +170,8 @@ class Fix8Visualizer {
                 
                 const hoverRadius = radius + 4; // allow generous margin for easy hovering
                 
-                const dx = mouseX - px;
-                const dy = mouseY - py;
+                const dx = pos.x - px;
+                const dy = pos.y - py;
                 
                 if (dx*dx + dy*dy <= hoverRadius*hoverRadius) {
                     foundIndex = i;
@@ -155,29 +184,54 @@ class Fix8Visualizer {
                 this.draw(); 
                 
                 if (foundIndex !== -1) {
-                    const f = this.fixations[foundIndex];
-                    this.tooltip.style.opacity = '1';
-                    this.tooltip.innerHTML = `
-                        <div style="font-weight: 800; margin-bottom:4px; color:var(--accent-primary)">Fixation ${foundIndex}</div>
-                        <div>X: <span style="color:#e2e8f0">${f.x_cord.toFixed(1)}</span></div>
-                        <div>Y: <span style="color:#e2e8f0">${f.y_cord.toFixed(1)}</span></div>
-                        <div>Duration: <span style="color:#e2e8f0">${f.duration.toFixed(1)}ms</span></div>
-                    `;
-                    this.canvas.style.cursor = 'pointer';
+                    this.canvas.style.cursor = 'grab'; // Indicates draggable
                 } else {
                     this.tooltip.style.opacity = '0';
                     this.canvas.style.cursor = 'crosshair';
                 }
             }
             
-            // Move tooltip with mouse if visible
-            if (this.hoveredIndex !== -1) {
-                this.tooltip.style.left = (e.clientX + 15) + 'px';
-                this.tooltip.style.top = (e.clientY + 15) + 'px';
+            // Update tooltip text and position if hovering
+            if (this.hoveredIndex !== -1 && !this.isDragging) {
+                const f = this.fixations[this.hoveredIndex];
+                this.tooltip.style.opacity = '1';
+                this.tooltip.style.left = (pos.rawX + 15) + 'px';
+                this.tooltip.style.top = (pos.rawY + 15) + 'px';
+                this.tooltip.innerHTML = `
+                    <div style="font-weight: 800; margin-bottom:4px; color:var(--accent-primary)">Fixation ${this.hoveredIndex}</div>
+                    <div>X: <span style="color:#e2e8f0">${f.x_cord.toFixed(1)}</span></div>
+                    <div>Y: <span style="color:#e2e8f0">${f.y_cord.toFixed(1)}</span></div>
+                    <div>Duration: <span style="color:#e2e8f0">${f.duration.toFixed(1)}ms</span></div>
+                `;
+            }
+        });
+        
+        this.canvas.addEventListener('mouseup', (e) => {
+            if (this.isDragging) {
+                const f = this.fixations[this.draggedIndex];
+                
+                // Fire callback to save to backend
+                if (this.onFixationUpdate) {
+                    this.onFixationUpdate(this.draggedIndex, f.x_cord, f.y_cord);
+                }
+                
+                this.isDragging = false;
+                this.draggedIndex = -1;
+                this.canvas.style.cursor = 'grab';
             }
         });
         
         this.canvas.addEventListener('mouseleave', () => {
+            if (this.isDragging) {
+                // If mouse leaves during drag, commit the drop
+                const f = this.fixations[this.draggedIndex];
+                if (this.onFixationUpdate) {
+                    this.onFixationUpdate(this.draggedIndex, f.x_cord, f.y_cord);
+                }
+                this.isDragging = false;
+                this.draggedIndex = -1;
+            }
+            
             if (this.hoveredIndex !== -1) {
                 this.hoveredIndex = -1;
                 this.tooltip.style.opacity = '0';

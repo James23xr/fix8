@@ -3,6 +3,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialize Canvas Visualizer
     const visualizer = new Fix8Visualizer('eye-canvas', 'tooltip');
     
+    // Bind the visualizer's drag-and-drop to our network API
+    visualizer.onFixationUpdate = (index, x, y) => {
+        fetch('/api/action/update_fixation', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ index, x, y })
+        }).catch(console.error); // Silently sync drift corrections
+    };
+    
     // UI Elements
     const btnLoadDemo = document.getElementById('btn-load-demo');
     const btnApplyNoise = document.getElementById('btn-apply-noise');
