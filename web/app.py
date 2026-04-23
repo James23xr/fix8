@@ -115,10 +115,28 @@ def api_state():
     engine = get_engine()
     return jsonify(_get_state_payload(engine))
 
+@app.route('/api/action/move', methods=['POST'])
+def api_action_move():
+    """Trigger the core engine iterator to navigate forward or backwards."""
+    data = request.json or {}
+    direction = data.get('direction')
+    
+    engine = get_engine()
+    if direction == 'right' or direction == 'next':
+        engine.next_fixation()
+    elif direction == 'left' or direction == 'previous':
+        engine.previous_fixation()
+        
+    return jsonify({
+        "message": f"Moved {direction}",
+        "state": _get_state_payload(engine)
+    })
+
 # Helper to format state for JSON
 def _get_state_payload(engine):
     payload = {
         "has_data": engine.eye_events is not None and not engine.eye_events.empty,
+        "current_fixation": engine.current_fixation,
         "fixations": [],
         "saccades": [] # Could be computed here or on frontend
     }
