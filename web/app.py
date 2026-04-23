@@ -154,6 +154,23 @@ def api_update_fixation():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/distort/noise', methods=['POST'])
+def api_distort_noise():
+    """Apply noise distortion via the engine."""
+    data = request.json or {}
+    threshold = int(data.get('threshold', 5))
+    
+    engine = get_engine()
+    if engine.eye_events is None or engine.eye_events.empty:
+        return jsonify({"error": "No trial loaded"}), 400
+        
+    engine.apply_noise(threshold)
+    
+    return jsonify({
+        "message": f"Noise applied (Threshold: {threshold})",
+        "state": _get_state_payload(engine)
+    })
+
 # Helper to format state for JSON
 def _get_state_payload(engine):
     payload = {
