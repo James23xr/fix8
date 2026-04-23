@@ -1849,24 +1849,19 @@ class Fix8():
 
 
     def previous_fixation(self):
-        # if self.model.suggested_corrections is not None:
-        if self.model.current_fixation != 0:
-            self.model.current_fixation -= 1
-
+        self.model.previous_fixation()
         self.progress_bar_updated(self.model.current_fixation, draw=False)
 
 
     def next_fixation(self):
-        if self.model.current_fixation == -1 and self.model.eye_events == None:
+        if self.model.current_fixation == -1 and self.model.eye_events is None:
             # Tour
             self.set_canvas_image('src/.images/fix8-keyboard.png')
             self.ui.canvas.draw()
             self.ui.button_next_fixation.setEnabled(False)
             return
         
-        if self.model.current_fixation != len(self.model.eye_events) - 1:
-            self.model.current_fixation += 1
-
+        self.model.next_fixation()
         self.progress_bar_updated(self.model.current_fixation, draw=False)
 
 

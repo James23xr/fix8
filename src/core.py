@@ -51,6 +51,19 @@ class Fix8Core:
         self.aoi_width = 7
         self.aoi_height = 4
 
+    def previous_fixation(self):
+        """Moves the active fixation cursor backwards."""
+        if self.current_fixation > 0:
+            self.current_fixation -= 1
+
+    def next_fixation(self):
+        """Moves the active fixation cursor forwards."""
+        if self.eye_events is None or self.eye_events.empty:
+            return
+            
+        if self.current_fixation < len(self.eye_events) - 1:
+            self.current_fixation += 1
+
     def save_state(self):
         """Saves current state to history for undo functionality."""
         current_state = Fix8State(
