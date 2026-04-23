@@ -132,6 +132,28 @@ def api_action_move():
         "state": _get_state_payload(engine)
     })
 
+@app.route('/api/action/update_fixation', methods=['POST'])
+def api_update_fixation():
+    """Manual correction: updating a specific fixation's coordinates."""
+    data = request.json or {}
+    index = data.get('index')
+    x = data.get('x')
+    y = data.get('y')
+    
+    if index is None or x is None or y is None:
+        return jsonify({"error": "Missing required fields (index, x, y)"}), 400
+        
+    engine = get_engine()
+    
+    try:
+        engine.update_fixation(int(index), float(x), float(y))
+        return jsonify({
+            "message": f"Fixation {index} updated to ({x}, {y})",
+            "state": _get_state_payload(engine)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Helper to format state for JSON
 def _get_state_payload(engine):
     payload = {

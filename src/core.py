@@ -64,6 +64,22 @@ class Fix8Core:
         if self.current_fixation < len(self.eye_events) - 1:
             self.current_fixation += 1
 
+    def update_fixation(self, index: int, new_x: float, new_y: float):
+        """Manually corrects the position of a specific fixation."""
+        if self.eye_events is None or self.eye_events.empty:
+            return
+            
+        # Get the dataframe index for the Nth fixation
+        fixations_only = self.eye_events[self.eye_events['eye_event'] == 'fixation']
+        if index < 0 or index >= len(fixations_only):
+            return
+            
+        real_df_index = fixations_only.index[index]
+        
+        # Overwrite coordinates
+        self.eye_events.at[real_df_index, 'x_cord'] = new_x
+        self.eye_events.at[real_df_index, 'y_cord'] = new_y
+
     def save_state(self):
         """Saves current state to history for undo functionality."""
         current_state = Fix8State(
