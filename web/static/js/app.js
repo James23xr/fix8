@@ -111,6 +111,30 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    document.addEventListener('keydown', (e) => {
+        if (!hasData) return;
+        
+        // Prevent default scrolling for arrows
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            
+            const direction = e.key === 'ArrowLeft' ? 'left' : 'right';
+            
+            fetch('/api/action/move', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ direction })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.error) {
+                    handleStateUpdate(data.state);
+                }
+            })
+            .catch(console.error);
+        }
+    });
+
     const handleStateUpdate = (state) => {
         hasData = state.has_data;
         fixCount.innerText = state.fixations.length || 0;
