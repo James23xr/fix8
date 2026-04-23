@@ -57,7 +57,79 @@ def index():
 # ---------------------------------------------------------
 # API ROUTES: Core Logic Wrapper
 # ---------------------------------------------------------
-# (Endpoints to be implemented in subsequent PRs)
+@app.route('/api/load_demo', methods=['POST'])
+def api_load_demo():
+    """Phase 1 Hybrid File Handling: Load a demo dataset on the server."""
+    engine = get_engine()
+    
+    # We will pick a demo file. You must make sure a demo file exists at this path.
+    # We will place a sample in web/demo_data/
+    demo_path = os.path.join(os.path.dirname(__file__), 'demo_data', 'demo_trial.json')
+    
+    if not os.path.exists(demo_path):
+        return jsonify({"error": f"Demo file not found at {demo_path}"}), 404
+        
+    try:
+        with open(demo_path, 'r', encoding='utf-8') as f:
+            trial_data = json.load(f)
+            
+        x_cord, y_cord, duration = [], [], []
+        
+        # Parse logic ported from batch_processor.py
+        if 'fixations' not in trial_data.keys():
+            for key in trial_data:
+                x_cord.append(trial_data[key][0])
+                y_cord.append(trial_data[key][1])
+                duration.append(trial_data[key][2])
+        else:
+            for fixation in trial_data["fixations"]:
+                x_cord.append(fixation[0])
+                y_cord.append(fixation[1])
+                duration.append(fixation[2])
+                
+        eye_events = pd.DataFrame({
+            "x_cord": x_cord,
+            "y_cord": y_cord,
+            "duration": duration,
+            "eye_event": "fixation"
+        })
+        
+        # Inject into engine instance
+        engine.eye_events = eye_events
+        engine.trial_path = demo_path
+        
+        # Return state to frontend
+        return jsonify({
+            "message": "Demo data loaded successfully",
+            "fixation_count": len(eye_events),
+            "state": _get_state_payload(engine)
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/state', methods=['GET'])
+def api_state():
+    """Get the current trial state (fixations, current index, etc.)."""
+    engine = get_engine()
+    return jsonify(_get_state_payload(engine))
+
+# Helper to format state for JSON
+def _get_state_payload(engine):
+    payload = {
+        "has_data": engine.eye_events is not None and not engine.eye_events.empty,
+        "fixations": [],
+        "saccades": [] # Could be computed here or on frontend
+    }
+    
+    if payload["has_data"]:
+        # We only send fixation events to frontend to build UI
+        fix_df = engine.eye_events[engine.eye_events['eye_event'] == 'fixation']
+        cols = ['x_cord', 'y_cord', 'duration']
+        payload["fixations"] = fix_df[cols].to_dict(orient='records')
+        
+    return payload
 
 
 
