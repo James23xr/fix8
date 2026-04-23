@@ -119,6 +119,71 @@ class Fix8Visualizer {
     }
     
     _setupEvents() {
-        // (Interactive tooltip logic to be implemented in PR 7)
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.fixations.length === 0) return;
+            
+            // Map screen coordinates to canvas coordinate space
+            const rect = this.canvas.getBoundingClientRect();
+            const scaleX = this.canvas.width / rect.width;
+            const scaleY = this.canvas.height / rect.height;
+            
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            
+            let foundIndex = -1;
+            
+            // Reverse loop to pick the circle drawn last (on top)
+            for (let i = this.fixations.length - 1; i >= 0; i--) {
+                const f = this.fixations[i];
+                const px = f.x_cord + this.offsetX;
+                const py = f.y_cord + this.offsetY;
+                const radius = Math.min(Math.max(f.duration / 25, 6), 35);
+                
+                const hoverRadius = radius + 4; // allow generous margin for easy hovering
+                
+                const dx = mouseX - px;
+                const dy = mouseY - py;
+                
+                if (dx*dx + dy*dy <= hoverRadius*hoverRadius) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+            
+            if (foundIndex !== this.hoveredIndex) {
+                this.hoveredIndex = foundIndex;
+                this.draw(); 
+                
+                if (foundIndex !== -1) {
+                    const f = this.fixations[foundIndex];
+                    this.tooltip.style.opacity = '1';
+                    this.tooltip.innerHTML = `
+                        <div style="font-weight: 800; margin-bottom:4px; color:var(--accent-primary)">Fixation ${foundIndex}</div>
+                        <div>X: <span style="color:#e2e8f0">${f.x_cord.toFixed(1)}</span></div>
+                        <div>Y: <span style="color:#e2e8f0">${f.y_cord.toFixed(1)}</span></div>
+                        <div>Duration: <span style="color:#e2e8f0">${f.duration.toFixed(1)}ms</span></div>
+                    `;
+                    this.canvas.style.cursor = 'pointer';
+                } else {
+                    this.tooltip.style.opacity = '0';
+                    this.canvas.style.cursor = 'crosshair';
+                }
+            }
+            
+            // Move tooltip with mouse if visible
+            if (this.hoveredIndex !== -1) {
+                this.tooltip.style.left = (e.clientX + 15) + 'px';
+                this.tooltip.style.top = (e.clientY + 15) + 'px';
+            }
+        });
+        
+        this.canvas.addEventListener('mouseleave', () => {
+            if (this.hoveredIndex !== -1) {
+                this.hoveredIndex = -1;
+                this.tooltip.style.opacity = '0';
+                this.canvas.style.cursor = 'crosshair';
+                this.draw();
+            }
+        });
     }
 }
