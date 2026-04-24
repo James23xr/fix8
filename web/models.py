@@ -26,8 +26,11 @@ class Project(db.Model):
     
     # Path to the raw trial file stored efficiently on the persistent cloud volume, bypassing SQL limits
     file_path = db.Column(db.String(500), nullable=False)
-    
+
+    # Path to the paired stimulus image (optional — NULL means no image uploaded)
+    image_path = db.Column(db.String(500), nullable=True)
+
     # State flags tracking processing
     is_demo = db.Column(db.Boolean, default=False)
-    
+
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)

@@ -44,10 +44,10 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
-
     # Initialize DB tables
     with app.app_context():
         db.create_all()
+        _run_migrations(app)
 
     # Route: Static File Entrypoint
     from flask_login import current_user
@@ -68,3 +68,16 @@ def create_app():
     app.register_blueprint(dashboard_bp)
 
     return app
+
+
+def _run_migrations(app):
+    """Self-contained startup migration — checks for missing columns and adds them.
+    Safe to run repeatedly; does nothing if columns already exist."""
+    from sqlalchemy import text, inspect
+    with app.app_context():
+        inspector = inspect(db.engine)
+        cols = [c['name'] for c in inspector.get_columns('project')]
+        if 'image_path' not in cols:
+            with db.engine.connect() as conn:
+                conn.execute(text('ALTER TABLE project ADD COLUMN image_path VARCHAR(500)'))
+                conn.commit()

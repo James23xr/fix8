@@ -164,6 +164,42 @@
             color: var(--text-muted);
             font-size: 0.85rem;
         }
+
+        .staged-files {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .staged-file {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .staged-file.trial { background: rgba(56, 189, 248, 0.15); color: #7dd3fc; }
+        .staged-file.image { background: rgba(129, 140, 248, 0.15); color: #a5b4fc; }
+        .staged-file .remove-staged {
+            cursor: pointer; opacity: 0.6; font-size: 0.9rem;
+        }
+        .staged-file .remove-staged:hover { opacity: 1; }
+
+        .image-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        .image-badge.has-image { background: rgba(129, 140, 248, 0.2); color: #a5b4fc; }
+        .image-badge.no-image { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
     </style>
 </head>
 <body>
@@ -174,10 +210,12 @@
         </div>
 
         <div class="upload-zone" id="upload-zone">
-            <input type="file" id="file-input" accept=".json,.asc" style="display: none;">
-            <p>Drag and drop trial data here</p>
-            <span>Supports .json and .asc files</span>
+            <input type="file" id="file-input" accept=".json,.asc,.png,.jpg,.jpeg" multiple style="display: none;">
+            <p>Drop trial + stimulus image here</p>
+            <span>Trial: .json / .asc &nbsp;·&nbsp; Image: .png / .jpg (optional)</span>
+            <div class="staged-files" id="staged-files"></div>
             <div id="upload-progress" style="margin-top: 10px; color: var(--accent-secondary); display: none;">Uploading...</div>
+            <button class="btn btn-primary" id="upload-btn" style="margin-top: 12px; width: auto; padding: 8px 24px; display: none;">Upload</button>
         </div>
 
         <div id="empty-state">
@@ -225,6 +263,9 @@
                     <div class="project-title">${p.name}</div>
                     <div class="project-meta">ID: ${p.id}</div>
                     ${p.is_demo ? '<div class="badge">Demo Dataset</div>' : ''}
+                    ${p.has_image
+                        ? `<div class="image-badge has-image">🖼 ${p.image_name}</div>`
+                        : '<div class="image-badge no-image">⚠ No stimulus image</div>'}
                 `;
 
                 card.querySelector('.delete-btn').addEventListener('click', async (e) => {
@@ -264,12 +305,54 @@
                 }
             }
 
-            // Drag and Drop Upload Logic
+            // Drag and Drop Upload Logic — auto-sorts files by type
             const uploadZone = document.getElementById('upload-zone');
             const fileInput = document.getElementById('file-input');
             const uploadProgress = document.getElementById('upload-progress');
+            const stagedFilesEl = document.getElementById('staged-files');
+            const uploadBtn = document.getElementById('upload-btn');
+            let stagedTrial = null;
+            let stagedImage = null;
 
-            uploadZone.addEventListener('click', () => fileInput.click());
+            const TRIAL_EXTS = ['.json', '.asc'];
+            const IMAGE_EXTS = ['.png', '.jpg', '.jpeg'];
+
+            function getExt(name) { return '.' + name.split('.').pop().toLowerCase(); }
+
+            function stageFiles(files) {
+                for (const f of files) {
+                    const ext = getExt(f.name);
+                    if (TRIAL_EXTS.includes(ext)) stagedTrial = f;
+                    else if (IMAGE_EXTS.includes(ext)) stagedImage = f;
+                    else alert(`Unsupported file type: ${f.name}`);
+                }
+                renderStaged();
+            }
+
+            function renderStaged() {
+                stagedFilesEl.innerHTML = '';
+                if (stagedTrial) {
+                    stagedFilesEl.innerHTML += `<span class="staged-file trial">📄 ${stagedTrial.name} <span class="remove-staged" data-type="trial">✕</span></span>`;
+                }
+                if (stagedImage) {
+                    stagedFilesEl.innerHTML += `<span class="staged-file image">🖼 ${stagedImage.name} <span class="remove-staged" data-type="image">✕</span></span>`;
+                }
+                uploadBtn.style.display = stagedTrial ? 'inline-flex' : 'none';
+                // wire remove buttons
+                stagedFilesEl.querySelectorAll('.remove-staged').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (btn.dataset.type === 'trial') stagedTrial = null;
+                        else stagedImage = null;
+                        renderStaged();
+                    });
+                });
+            }
+
+            uploadZone.addEventListener('click', (e) => {
+                if (e.target === uploadBtn || e.target.closest('.remove-staged')) return;
+                fileInput.click();
+            });
 
             uploadZone.addEventListener('dragover', (e) => {
                 e.preventDefault();
@@ -283,56 +366,54 @@
             uploadZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 uploadZone.classList.remove('dragover');
-                if (e.dataTransfer.files.length) {
-                    handleUpload(e.dataTransfer.files[0]);
-                }
+                if (e.dataTransfer.files.length) stageFiles(e.dataTransfer.files);
             });
 
             fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length) {
-                    handleUpload(e.target.files[0]);
-                }
+                if (e.target.files.length) stageFiles(e.target.files);
+                fileInput.value = '';
             });
 
-            async function handleUpload(file) {
-                if (!file.name.endsWith('.json') && !file.name.endsWith('.asc')) {
-                    alert('Only .json and .asc files are currently supported.');
-                    return;
-                }
-                
+            uploadBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!stagedTrial) return;
+
                 uploadProgress.style.display = 'block';
-                uploadProgress.innerText = `Uploading ${file.name}...`;
-                uploadZone.style.pointerEvents = 'none';
+                uploadProgress.innerText = `Uploading ${stagedTrial.name}${stagedImage ? ' + ' + stagedImage.name : ''}...`;
+                uploadBtn.disabled = true;
 
                 const formData = new FormData();
-                formData.append('file', file);
+                formData.append('file', stagedTrial);
+                if (stagedImage) formData.append('image', stagedImage);
 
                 try {
                     const res = await fetch('/api/upload', {
                         method: 'POST',
                         body: formData
                     });
-                    
+
                     if (!res.ok) {
                         const err = await res.json();
                         throw new Error(err.error || 'Upload failed');
                     }
-                    
+
                     const newProject = await res.json();
                     emptyState.style.display = 'none';
                     addProjectCard(newProject.project);
-                    
+
                     uploadProgress.innerText = 'Upload successful!';
                     setTimeout(() => { uploadProgress.style.display = 'none'; }, 3000);
+                    stagedTrial = null;
+                    stagedImage = null;
+                    renderStaged();
                 } catch (err) {
                     console.error(err);
                     alert('Upload Error: ' + err.message);
                     uploadProgress.style.display = 'none';
                 } finally {
-                    uploadZone.style.pointerEvents = 'all';
-                    fileInput.value = ''; // clear input
+                    uploadBtn.disabled = false;
                 }
-            }
+            });
         });
     </script>
 </body>
