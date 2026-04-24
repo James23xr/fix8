@@ -116,6 +116,33 @@
             border-radius: 16px;
             border: 1px dashed rgba(255, 255, 255, 0.1);
         }
+
+        .upload-zone {
+            border: 2px dashed rgba(56, 189, 248, 0.4);
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            background: rgba(15, 23, 42, 0.4);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            background: rgba(56, 189, 248, 0.1);
+            border-color: var(--accent-primary);
+        }
+
+        .upload-zone p {
+            color: var(--text-main);
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+
+        .upload-zone span {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -123,6 +150,13 @@
         <div class="header">
             <h1>My Projects</h1>
             <a href="/logout" class="logout-btn">Log Out</a>
+        </div>
+
+        <div class="upload-zone" id="upload-zone">
+            <input type="file" id="file-input" accept=".json,.asc" style="display: none;">
+            <p>Drag and drop trial data here</p>
+            <span>Supports .json and .asc files</span>
+            <div id="upload-progress" style="margin-top: 10px; color: var(--accent-secondary); display: none;">Uploading...</div>
         </div>
 
         <div id="empty-state">
@@ -154,33 +188,109 @@
                     return;
                 }
                 
-                projects.forEach(p => {
-                    const card = document.createElement('div');
-                    card.className = 'project-card';
-                    card.innerHTML = `
-                        <div class="project-title">${p.name}</div>
-                        <div class="project-meta">ID: ${p.id}</div>
-                        ${p.is_demo ? '<div class="badge">Demo Dataset</div>' : ''}
-                    `;
-                    
-                    card.addEventListener('click', async () => {
-                        card.style.opacity = '0.5';
-                        const loadRes = await fetch(`/api/projects/${p.id}/load`, { method: 'POST' });
-                        if (loadRes.ok) {
-                            window.location.href = '/';
-                        } else {
-                            card.style.opacity = '1';
-                            alert('Failed to load project into engine.');
-                        }
-                    });
-                    
-                    container.appendChild(card);
-                });
+                projects.forEach(addProjectCard);
                 
             } catch (err) {
                 console.error(err);
                 emptyState.innerText = "Failed to load projects.";
                 emptyState.style.display = 'block';
+            }
+
+            function addProjectCard(p) {
+                const card = document.createElement('div');
+                card.className = 'project-card';
+                card.innerHTML = `
+                    <div class="project-title">${p.name}</div>
+                    <div class="project-meta">ID: ${p.id}</div>
+                    ${p.is_demo ? '<div class="badge">Demo Dataset</div>' : ''}
+                `;
+                
+                card.addEventListener('click', async () => {
+                    card.style.opacity = '0.5';
+                    const loadRes = await fetch(`/api/projects/${p.id}/load`, { method: 'POST' });
+                    if (loadRes.ok) {
+                        window.location.href = '/';
+                    } else {
+                        card.style.opacity = '1';
+                        alert('Failed to load project into engine.');
+                    }
+                });
+                
+                if (container.firstChild) {
+                    container.insertBefore(card, container.firstChild);
+                } else {
+                    container.appendChild(card);
+                }
+            }
+
+            // Drag and Drop Upload Logic
+            const uploadZone = document.getElementById('upload-zone');
+            const fileInput = document.getElementById('file-input');
+            const uploadProgress = document.getElementById('upload-progress');
+
+            uploadZone.addEventListener('click', () => fileInput.click());
+
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.classList.remove('dragover');
+            });
+
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length) {
+                    handleUpload(e.dataTransfer.files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    handleUpload(e.target.files[0]);
+                }
+            });
+
+            async function handleUpload(file) {
+                if (!file.name.endsWith('.json') && !file.name.endsWith('.asc')) {
+                    alert('Only .json and .asc files are currently supported.');
+                    return;
+                }
+                
+                uploadProgress.style.display = 'block';
+                uploadProgress.innerText = `Uploading ${file.name}...`;
+                uploadZone.style.pointerEvents = 'none';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const res = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error || 'Upload failed');
+                    }
+                    
+                    const newProject = await res.json();
+                    emptyState.style.display = 'none';
+                    addProjectCard(newProject.project);
+                    
+                    uploadProgress.innerText = 'Upload successful!';
+                    setTimeout(() => { uploadProgress.style.display = 'none'; }, 3000);
+                } catch (err) {
+                    console.error(err);
+                    alert('Upload Error: ' + err.message);
+                    uploadProgress.style.display = 'none';
+                } finally {
+                    uploadZone.style.pointerEvents = 'all';
+                    fileInput.value = ''; // clear input
+                }
             }
         });
     </script>

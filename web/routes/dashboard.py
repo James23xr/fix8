@@ -1,6 +1,8 @@
-from flask import Blueprint, send_from_directory, jsonify, current_app
+from flask import Blueprint, send_from_directory, jsonify, current_app, request
 import os
 import json
+import uuid
+from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 from web.models import db, Project
 
@@ -47,7 +49,7 @@ def load_project(project_id):
     engine = get_engine()
     
     if project.is_demo:
-        file_path = os.path.join(os.path.dirname(__file__), '..', 'demo_data', 'demo_trial.json')
+        file_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'demo_data', 'demo_trial.json')
     else:
         file_path = os.path.join(os.environ.get('STORAGE_PATH', ''), project.file_path)
         
@@ -83,3 +85,43 @@ def load_project(project_id):
         return jsonify({"message": f"Project {project.name} loaded successfully."})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@dashboard_bp.route('/api/upload', methods=['POST'])
+@login_required
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+        
+    if not (file.filename.endswith('.json') or file.filename.endswith('.asc')):
+        return jsonify({"error": "Invalid file type. Only .json and .asc allowed."}), 400
+        
+    filename = secure_filename(file.filename)
+    unique_filename = f"{current_user.id}_{uuid.uuid4().hex[:8]}_{filename}"
+    
+    storage_path = os.environ.get('STORAGE_PATH', os.path.join(os.path.dirname(__file__), '..', 'uploads'))
+    os.makedirs(storage_path, exist_ok=True)
+    
+    save_path = os.path.join(storage_path, unique_filename)
+    file.save(save_path)
+    
+    project = Project(
+        name=filename,
+        file_path=unique_filename,
+        is_demo=False,
+        user_id=current_user.id
+    )
+    db.session.add(project)
+    db.session.commit()
+    
+    return jsonify({
+        "message": "File uploaded successfully",
+        "project": {
+            "id": project.id,
+            "name": project.name,
+            "is_demo": project.is_demo
+        }
+    })
