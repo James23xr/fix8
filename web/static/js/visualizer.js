@@ -1,21 +1,16 @@
 class Fix8Visualizer {
-    constructor(canvasId, tooltipId) {
-        this.canvas = document.getElementById(canvasId);
-        this.ctx = this.canvas.getContext('2d');
-        this.tooltip = document.getElementById(tooltipId);
+    constructor() {
+        this.img = document.getElementById('engine-render');
+        this.grid = document.getElementById('interactive-grid');
+        this.tooltip = document.getElementById('tooltip');
         
         this.fixations = [];
-        this.offsetX = 0;
-        this.offsetY = 0;
-        
         this.hoveredIndex = -1;
         this.isDragging = false;
         this.draggedIndex = -1;
-        this.onFixationUpdate = null; // Callback for app.js
-        this.bgImage = null;
+        this.onFixationUpdate = null;
         
         this._setupEvents();
-        this.draw(); // initialize empty state
     }
     
     setData(fixations, imageUrl) {
@@ -26,188 +21,73 @@ class Fix8Visualizer {
             f.duration = Number(f.duration);
         });
         this.hoveredIndex = -1;
-        
-        if (imageUrl) {
-            this.bgImage = new Image();
-            this.bgImage.onload = () => {
-                // Lock the internal canvas matrix exactly to the innate resolution of the image.
-                this.canvas.width = this.bgImage.width;
-                this.canvas.height = this.bgImage.height;
-                
-                // NATIVE CSS OVERLAY RENDERING:
-                // Instead of manually repainting the image into the canvas buffer every single frame 
-                // (which causes aggressive scaling bugs), we inject the image purely as a CSS root background. 
-                // The canvas floats physically perfectly on top of it, creating an immaculate 1:1 mapped layer system!
-                this.canvas.style.backgroundImage = `url(${imageUrl})`;
-                this.canvas.style.backgroundSize = '100% 100%'; 
-                this.canvas.style.backgroundPosition = 'center';
-                this.canvas.style.backgroundRepeat = 'no-repeat';
-                this.canvas.style.backgroundColor = 'transparent'; // Expose the background through the canvas
-                
-                this.offsetX = 0;
-                this.offsetY = 0;
-                this.draw();
-            };
-            this.bgImage.src = imageUrl;
-        } else {
-            this.bgImage = null;
-            this.canvas.style.backgroundImage = 'none';
-            this.canvas.style.backgroundColor = '#ffffff';
-            this._computeBounds(); // compute dynamic margins for headless data
-            this.draw();
-        }
-    }
-    
-    _computeBounds() {
-        if (this.fixations.length === 0) return;
-        
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
-        
-        this.fixations.forEach(f => {
-            if (f.x_cord < minX) minX = f.x_cord;
-            if (f.x_cord > maxX) maxX = f.x_cord;
-            if (f.y_cord < minY) minY = f.y_cord;
-            if (f.y_cord > maxY) maxY = f.y_cord;
-        });
-        
-        // Add padding
-        const padding = 150;
-        const width = maxX - minX + (padding*2);
-        const height = maxY - minY + (padding*2);
-        
-        this.canvas.width = Math.max(width, 800);
-        this.canvas.height = Math.max(height, 600);
-        
-        // Center the visualization bounds inside the canvas
-        this.offsetX = Math.max(padding, (this.canvas.width - (maxX - minX)) / 2) - minX;
-        this.offsetY = Math.max(padding, (this.canvas.height - (maxY - minY)) / 2) - minY;
+        this.draw();
     }
     
     draw() {
-        // clear canvas
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        if (this.fixations.length === 0 && !this.bgImage) {
-            this.ctx.fillStyle = '#94a3b8';
-            this.ctx.font = '20px Inter, sans-serif';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText("No Data Loaded", this.canvas.width/2, this.canvas.height/2);
+        if (this.fixations.length === 0) {
+            this.img.src = '';
+            // Or handle empty state
             return;
         }
-        
-        // CSS intrinsically handles the background rendering, so we no longer manually call ctx.drawImage()!
-        
-        // Draw saccades (lines connecting fixations)
-        this.ctx.beginPath();
-        this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)'; // vibrant cyan
-        this.ctx.lineWidth = 2;
-        
-        for (let i = 0; i < this.fixations.length; i++) {
-            const px = this.fixations[i].x_cord + this.offsetX;
-            const py = this.fixations[i].y_cord + this.offsetY;
-            if (i === 0) {
-                this.ctx.moveTo(px, py);
-            } else {
-                this.ctx.lineTo(px, py);
-            }
-        }
-        this.ctx.stroke();
-
-        // Draw fixations (circles)
-        for (let i = 0; i < this.fixations.length; i++) {
-            const f = this.fixations[i];
-            const px = f.x_cord + this.offsetX;
-            const py = f.y_cord + this.offsetY;
-            
-            // Normalize duration for radius (e.g. min 6px, max 35px)
-            const radius = Math.min(Math.max(f.duration / 25, 6), 35);
-            
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, radius, 0, 2 * Math.PI, false);
-            
-            if (i === this.hoveredIndex) {
-                 this.ctx.fillStyle = 'rgba(251, 191, 36, 0.9)'; // hover color (amber)
-                 this.ctx.fill();
-                 this.ctx.lineWidth = 3;
-                 this.ctx.strokeStyle = '#f59e0b';
-                 this.ctx.stroke();
-                 
-                 // Glow effect
-                 this.ctx.shadowBlur = 15;
-                 this.ctx.shadowColor = 'rgba(245, 158, 11, 0.6)';
-                 this.ctx.stroke();
-                 this.ctx.shadowBlur = 0; // reset
-            } else {
-                 this.ctx.fillStyle = 'rgba(239, 68, 68, 0.65)'; // normal color (red)
-                 this.ctx.fill();
-                 this.ctx.lineWidth = 1;
-                 this.ctx.strokeStyle = 'rgba(220, 38, 38, 0.9)';
-                 this.ctx.stroke();
-                 
-                 // index text inside big enough circles
-                 if (radius > 12) {
-                     this.ctx.fillStyle = '#fff';
-                     this.ctx.font = '600 11px Inter, sans-serif';
-                     this.ctx.textAlign = 'center';
-                     this.ctx.textBaseline = 'middle';
-                     this.ctx.fillText(i.toString(), px, py);
-                 }
-            }
-        }
+        // Force backend regeneration of Matplotlib pipeline
+        this.img.src = '/api/render?t=' + Date.now();
     }
     
     _setupEvents() {
+        // We use naturalWidth/Height to inversely scale CSS bounding boxes back to matplotlib data bounds
         const getMousePos = (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const scaleX = this.canvas.width / rect.width;
-            const scaleY = this.canvas.height / rect.height;
+            const rect = this.img.getBoundingClientRect();
+            // Matplotlib guarantees the output PNG intrinsically aligns with the maximum original image domain,
+            // EXCEPT if matplotlib natively applies paddings. We used pad_inches=0 and tight_layout on the backend.
+            const nativeScaleX = (this.img.naturalWidth && rect.width) ? (this.img.naturalWidth / rect.width) : 1;
+            const nativeScaleY = (this.img.naturalHeight && rect.height) ? (this.img.naturalHeight / rect.height) : 1;
+            
             return {
-                x: (e.clientX - rect.left) * scaleX,
-                y: (e.clientY - rect.top) * scaleY,
+                x: (e.clientX - rect.left) * nativeScaleX,
+                y: (e.clientY - rect.top) * nativeScaleY,
                 rawX: e.clientX,
                 rawY: e.clientY
             };
         };
 
-        this.canvas.addEventListener('mousedown', (e) => {
+        this.grid.addEventListener('mousedown', (e) => {
             if (this.hoveredIndex !== -1) {
                 this.isDragging = true;
                 this.draggedIndex = this.hoveredIndex;
             }
         });
 
-        this.canvas.addEventListener('mousemove', (e) => {
+        this.grid.addEventListener('mousemove', (e) => {
             if (this.fixations.length === 0) return;
             const pos = getMousePos(e);
             
             // Handle Dragging
             if (this.isDragging && this.draggedIndex !== -1) {
-                // Update local visual model immediately for rapid UI response
-                this.fixations[this.draggedIndex].x_cord = pos.x - this.offsetX;
-                this.fixations[this.draggedIndex].y_cord = pos.y - this.offsetY;
-                this.draw();
+                // Instantly update local dataset so it doesn't snap back on subsequent network hops
+                this.fixations[this.draggedIndex].x_cord = pos.x;
+                this.fixations[this.draggedIndex].y_cord = pos.y;
                 
                 // Hide tooltip while dragging
                 this.tooltip.style.opacity = '0';
-                this.canvas.style.cursor = 'grabbing';
+                this.grid.style.cursor = 'grabbing';
+                // NOTE: We don't call this.draw() continuously during drag to prevent backend spam!
+                // We let the drop event fire the SSR re-render.
                 return;
             }
             
-            // Handle Hovering
+            // Handle Hovering via the invisible datagrid
             let foundIndex = -1;
             
-            // Reverse loop to pick the circle drawn last (on top)
             for (let i = this.fixations.length - 1; i >= 0; i--) {
                 const f = this.fixations[i];
-                const px = f.x_cord + this.offsetX;
-                const py = f.y_cord + this.offsetY;
+                
+                // The scaled hover radius matching matplotlib visual scatter area roughly
                 const radius = Math.min(Math.max(f.duration / 25, 6), 35);
+                const hoverRadius = radius + 8; // Margin buffer
                 
-                const hoverRadius = radius + 4; // allow generous margin for easy hovering
-                
-                const dx = pos.x - px;
-                const dy = pos.y - py;
+                const dx = pos.x - f.x_cord;
+                const dy = pos.y - f.y_cord;
                 
                 if (dx*dx + dy*dy <= hoverRadius*hoverRadius) {
                     foundIndex = i;
@@ -217,13 +97,12 @@ class Fix8Visualizer {
             
             if (foundIndex !== this.hoveredIndex) {
                 this.hoveredIndex = foundIndex;
-                this.draw(); 
                 
                 if (foundIndex !== -1) {
-                    this.canvas.style.cursor = 'grab'; // Indicates draggable
+                    this.grid.style.cursor = 'grab'; // Indicates draggable
                 } else {
                     this.tooltip.style.opacity = '0';
-                    this.canvas.style.cursor = 'crosshair';
+                    this.grid.style.cursor = 'crosshair';
                 }
             }
             
@@ -238,11 +117,12 @@ class Fix8Visualizer {
                     <div>X: <span style="color:#e2e8f0">${f.x_cord.toFixed(1)}</span></div>
                     <div>Y: <span style="color:#e2e8f0">${f.y_cord.toFixed(1)}</span></div>
                     <div>Duration: <span style="color:#e2e8f0">${f.duration.toFixed(1)}ms</span></div>
+                    <div style="font-size: 0.70rem; color: #a1a1aa; margin-top: 4px;">Click & Drag to reposition</div>
                 `;
             }
         });
         
-        this.canvas.addEventListener('mouseup', (e) => {
+        this.grid.addEventListener('mouseup', (e) => {
             if (this.isDragging) {
                 const f = this.fixations[this.draggedIndex];
                 
@@ -253,11 +133,14 @@ class Fix8Visualizer {
                 
                 this.isDragging = false;
                 this.draggedIndex = -1;
-                this.canvas.style.cursor = 'grab';
+                this.grid.style.cursor = 'grab';
+                
+                // Redraw from backend immediately after drop
+                this.draw(); 
             }
         });
         
-        this.canvas.addEventListener('mouseleave', () => {
+        this.grid.addEventListener('mouseleave', () => {
             if (this.isDragging) {
                 // If mouse leaves during drag, commit the drop
                 const f = this.fixations[this.draggedIndex];
@@ -266,13 +149,13 @@ class Fix8Visualizer {
                 }
                 this.isDragging = false;
                 this.draggedIndex = -1;
+                this.draw();
             }
             
             if (this.hoveredIndex !== -1) {
                 this.hoveredIndex = -1;
                 this.tooltip.style.opacity = '0';
-                this.canvas.style.cursor = 'crosshair';
-                this.draw();
+                this.grid.style.cursor = 'crosshair';
             }
         });
     }
