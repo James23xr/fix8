@@ -86,6 +86,23 @@ def load_project(project_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@dashboard_bp.route('/api/projects/<int:project_id>', methods=['DELETE'])
+@login_required
+def delete_project(project_id):
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+
+    if not project.is_demo:
+        storage_path = os.environ.get('STORAGE_PATH', os.path.join(os.path.dirname(__file__), '..', 'uploads'))
+        file_path = os.path.join(storage_path, project.file_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    db.session.delete(project)
+    db.session.commit()
+    return jsonify({"message": "Project deleted"})
+
 @dashboard_bp.route('/api/upload', methods=['POST'])
 @login_required
 def upload_file():
