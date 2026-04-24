@@ -117,6 +117,27 @@
             border: 1px dashed rgba(255, 255, 255, 0.1);
         }
 
+        .delete-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(239, 68, 68, 0.15);
+            color: rgba(239, 68, 68, 0.7);
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+        }
+        .project-card:hover .delete-btn { opacity: 1; }
+        .delete-btn:hover { background: rgba(239, 68, 68, 0.8) !important; color: white !important; }
+
         .upload-zone {
             border: 2px dashed rgba(56, 189, 248, 0.4);
             border-radius: 16px;
@@ -200,11 +221,31 @@
                 const card = document.createElement('div');
                 card.className = 'project-card';
                 card.innerHTML = `
+                    <button class="delete-btn" title="Delete project">&#x2715;</button>
                     <div class="project-title">${p.name}</div>
                     <div class="project-meta">ID: ${p.id}</div>
                     ${p.is_demo ? '<div class="badge">Demo Dataset</div>' : ''}
                 `;
-                
+
+                card.querySelector('.delete-btn').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
+                    const res = await fetch(`/api/projects/${p.id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.95)';
+                        setTimeout(() => {
+                            card.remove();
+                            if (!container.querySelector('.project-card')) {
+                                emptyState.style.display = 'block';
+                            }
+                        }, 200);
+                    } else {
+                        alert('Failed to delete project.');
+                    }
+                });
+
                 card.addEventListener('click', async () => {
                     card.style.opacity = '0.5';
                     const loadRes = await fetch(`/api/projects/${p.id}/load`, { method: 'POST' });
@@ -215,7 +256,7 @@
                         alert('Failed to load project into engine.');
                     }
                 });
-                
+
                 if (container.firstChild) {
                     container.insertBefore(card, container.firstChild);
                 } else {
