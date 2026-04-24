@@ -33,7 +33,9 @@ def get_projects():
     return jsonify([{
         "id": p.id,
         "name": p.name,
-        "is_demo": p.is_demo
+        "is_demo": p.is_demo,
+        "has_image": bool(p.image_path),
+        "image_name": os.path.basename(p.image_path) if p.image_path else None
     } for p in projects])
 
 @dashboard_bp.route('/api/projects/<int:project_id>/load', methods=['POST'])
@@ -81,6 +83,22 @@ def load_project(project_id):
         
         engine.eye_events = eye_events
         engine.trial_path = file_path
+
+        # Auto-load the paired stimulus image if one exists
+        if project.image_path:
+            storage_path = os.environ.get('STORAGE_PATH', os.path.join(os.path.dirname(__file__), '..', 'uploads'))
+            img_full_path = os.path.abspath(os.path.join(storage_path, project.image_path))
+            if os.path.exists(img_full_path):
+                engine.image_file_path = img_full_path
+            else:
+                engine.image_file_path = None   # file missing, don't crash
+        elif project.is_demo:
+            # Demo projects use the bundled stimulus image
+            engine.image_file_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), '..', 'static', 'demo_data', 'demo_image.png')
+            )
+        else:
+            engine.image_file_path = None
         
         return jsonify({"message": f"Project {project.name} loaded successfully."})
     except Exception as e:
@@ -95,9 +113,16 @@ def delete_project(project_id):
 
     if not project.is_demo:
         storage_path = os.environ.get('STORAGE_PATH', os.path.join(os.path.dirname(__file__), '..', 'uploads'))
-        file_path = os.path.join(storage_path, project.file_path)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        # Delete trial file
+        if project.file_path:
+            trial_path = os.path.join(storage_path, project.file_path)
+            if os.path.exists(trial_path):
+                os.remove(trial_path)
+        # Delete image file
+        if project.image_path:
+            img_path = os.path.join(storage_path, project.image_path)
+            if os.path.exists(img_path):
+                os.remove(img_path)
 
     db.session.delete(project)
     db.session.commit()
@@ -124,10 +149,22 @@ def upload_file():
     
     save_path = os.path.join(storage_path, unique_filename)
     file.save(save_path)
+
+    # Handle optional stimulus image
+    unique_image_name = None
+    if 'image' in request.files:
+        image = request.files['image']
+        if image.filename and image.filename != '':
+            img_ext = os.path.splitext(image.filename)[1].lower()
+            if img_ext in ('.png', '.jpg', '.jpeg'):
+                img_filename = secure_filename(image.filename)
+                unique_image_name = f"{current_user.id}_{uuid.uuid4().hex[:8]}_{img_filename}"
+                image.save(os.path.join(storage_path, unique_image_name))
     
     project = Project(
         name=filename,
         file_path=unique_filename,
+        image_path=unique_image_name,
         is_demo=False,
         user_id=current_user.id
     )
@@ -139,6 +176,8 @@ def upload_file():
         "project": {
             "id": project.id,
             "name": project.name,
-            "is_demo": project.is_demo
+            "is_demo": project.is_demo,
+            "has_image": bool(unique_image_name),
+            "image_name": os.path.basename(unique_image_name) if unique_image_name else None
         }
     })
