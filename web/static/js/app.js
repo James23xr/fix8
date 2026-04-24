@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     
     // Initialize Canvas Visualizer
-    const visualizer = new Fix8Visualizer('eye-canvas', 'tooltip');
+    const visualizer = new Fix8Visualizer();
     
     // Bind the visualizer's drag-and-drop to our network API
     visualizer.onFixationUpdate = (index, x, y) => {
