@@ -33,16 +33,35 @@ def create_app():
     db.init_app(app)
     Session(app)
     
+    from flask_login import LoginManager
+    from web.models import User
+    
+    # Setup LoginManager
+    login_manager = LoginManager()
+    login_manager.login_view = 'auth.login'
+    login_manager.init_app(app)
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+
     # Initialize DB tables
     with app.app_context():
         db.create_all()
 
     # Route: Static File Entrypoint
+    from flask_login import current_user
+    from flask import redirect, url_for
     @app.route('/')
     def index():
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login'))
         return app.send_static_file('index.html')
 
     # Register API Blueprint
     app.register_blueprint(api_bp)
+    
+    from web.routes.auth import auth_bp
+    app.register_blueprint(auth_bp)
 
     return app
