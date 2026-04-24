@@ -149,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
         fixCount.innerText = state.fixations.length || 0;
         
         if (state.fixations) {
-            visualizer.setData(state.fixations);
+            visualizer.setData(state.fixations, state.image_url);
         }
         updateControls();
     };

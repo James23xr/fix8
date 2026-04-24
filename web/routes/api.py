@@ -26,7 +26,8 @@ def _get_state_payload(engine):
         "has_data": engine.eye_events is not None and not engine.eye_events.empty,
         "current_fixation": engine.current_fixation,
         "fixations": [],
-        "saccades": []
+        "saccades": [],
+        "image_url": getattr(engine, 'image_url', None)
     }
     
     if payload["has_data"]:
@@ -44,7 +45,7 @@ def api_state():
 @api_bp.route('/load_demo', methods=['POST'])
 def api_load_demo():
     engine = get_engine()
-    demo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'demo_data', 'demo_trial.json')
+    demo_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'demo_data', 'demo_trial.json')
     
     if not os.path.exists(demo_path):
         return jsonify({"error": f"Demo file not found at {demo_path}"}), 404
@@ -72,6 +73,7 @@ def api_load_demo():
             "eye_event": "fixation"
         })
         engine.trial_path = demo_path
+        engine.image_url = "/static/demo_data/demo_image.png"
         
         return jsonify({
             "message": "Demo data loaded",

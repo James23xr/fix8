@@ -35,19 +35,26 @@ body {
   height: 100%;
 }
 
-/* Glassmorphic Sidebar */
 .sidebar {
-  width: 320px;
   background: var(--panel-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-right: 1px solid var(--panel-border);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   z-index: 10;
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
+}
+
+.left-sidebar {
+  width: 320px;
+  border-right: 1px solid var(--panel-border);
+}
+
+.right-sidebar {
+  width: 320px;
+  border-left: 1px solid var(--panel-border);
 }
 
 .sidebar h1 {
@@ -202,7 +209,7 @@ input[type=range]::-webkit-slider-runnable-track {
 
 /* Tooltip */
 #tooltip {
-  position: absolute;
+  position: fixed;
   background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(4px);
   border: 1px solid var(--accent-primary);
@@ -213,7 +220,7 @@ input[type=range]::-webkit-slider-runnable-track {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.1s ease;
-  z-index: 100;
+  z-index: 9999;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 

@@ -13,7 +13,7 @@
 <body>
     <div id="app-container">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar left-sidebar">
             <div>
                 <h1>Fix8 Web</h1>
                 <p style="color: var(--text-muted); font-size: 0.85rem;">Session Isolated Workspace</p>
@@ -71,6 +71,37 @@
                 </svg>
             </div>
         </main>
+
+        <!-- Right Sidebar -->
+        <aside class="sidebar right-sidebar">
+            <div class="control-group">
+                <h3 style="color: var(--accent-secondary);">Filters Toolkit</h3>
+                <div class="control-item" style="flex-direction: column; align-items: stretch; gap: 4px;">
+                    <label>Duration Threshold (ms)</label>
+                    <input type="number" id="filter-duration" placeholder="e.g. 80" style="padding: 8px; border-radius: 4px; background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); color: #fff;">
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" style="flex: 1; font-size: 0.8rem;">&lt; Less</button>
+                    <button class="btn" style="flex: 1; font-size: 0.8rem;">&gt; Greater</button>
+                </div>
+                <button class="btn" style="border-color: rgba(239, 68, 68, 0.4); margin-top: 8px;">Filter Outliers</button>
+                <button class="btn" style="margin-top: 4px;">Merge Fixations</button>
+            </div>
+
+            <div class="control-group" style="margin-top: 1.5rem;">
+                <h3 style="color: #fbbf24;">Algorithms</h3>
+                
+                <label style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: -4px;">Automatic Corrections</label>
+                <select style="padding: 10px; border-radius: 4px; background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); color: #fff; width: 100%;">
+                    <option value="">Select Algorithm...</option>
+                    <option value="warp">Warp</option>
+                    <option value="attach">Attach</option>
+                    <option value="chain">Chain</option>
+                    <option value="cluster">Cluster</option>
+                </select>
+                <button class="btn btn-primary" style="margin-top: 4px;">Run Automatic</button>
+            </div>
+        </aside>
     </div>
 
     <style>
