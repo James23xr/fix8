@@ -20,6 +20,11 @@ class Fix8Visualizer {
     
     setData(fixations, imageUrl) {
         this.fixations = fixations || [];
+        this.fixations.forEach(f => {
+            f.x_cord = Number(f.x_cord);
+            f.y_cord = Number(f.y_cord);
+            f.duration = Number(f.duration);
+        });
         this.hoveredIndex = -1;
         this._computeBounds();
         
