@@ -12,16 +12,30 @@ class Fix8Visualizer {
         this.isDragging = false;
         this.draggedIndex = -1;
         this.onFixationUpdate = null; // Callback for app.js
+        this.bgImage = null;
         
         this._setupEvents();
         this.draw(); // initialize empty state
     }
     
-    setData(fixations) {
+    setData(fixations, imageUrl) {
         this.fixations = fixations || [];
         this.hoveredIndex = -1;
         this._computeBounds();
-        this.draw();
+        
+        if (imageUrl) {
+            this.bgImage = new Image();
+            this.bgImage.onload = () => {
+                // Ensure canvas bounds can actually hold the image
+                this.canvas.width = Math.max(this.canvas.width, this.bgImage.width + 100);
+                this.canvas.height = Math.max(this.canvas.height, this.bgImage.height + 100);
+                this.draw();
+            };
+            this.bgImage.src = imageUrl;
+        } else {
+            this.bgImage = null;
+            this.draw();
+        }
     }
     
     _computeBounds() {
@@ -54,12 +68,16 @@ class Fix8Visualizer {
         // clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        if (this.fixations.length === 0) {
+        if (this.fixations.length === 0 && !this.bgImage) {
             this.ctx.fillStyle = '#94a3b8';
             this.ctx.font = '20px Inter, sans-serif';
             this.ctx.textAlign = 'center';
             this.ctx.fillText("No Data Loaded", this.canvas.width/2, this.canvas.height/2);
             return;
+        }
+        
+        if (this.bgImage && this.bgImage.complete) {
+            this.ctx.drawImage(this.bgImage, this.offsetX, this.offsetY);
         }
         
         // Draw saccades (lines connecting fixations)
