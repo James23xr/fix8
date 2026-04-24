@@ -28,7 +28,7 @@ class Fix8State:
             self.eye_events = eye_events.copy()
 
         if suggested_corrections is None:
-            self.suggested_corrections = []
+            self.suggested_corrections = None
         else:
             self.suggested_corrections = suggested_corrections.copy()
 
