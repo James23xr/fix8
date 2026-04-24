@@ -526,6 +526,8 @@ def api_render():
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=100)
     if img is not None:
         ax.imshow(img)
+    else:
+        ax.invert_yaxis()
 
     if show_aois and engine.aoi is not None and not engine.aoi.empty:
         for _, row in engine.aoi.iterrows():
