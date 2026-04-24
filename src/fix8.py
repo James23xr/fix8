@@ -675,7 +675,9 @@ class Fix8():
                 at_max = True
              
             fix8_state = self.model.state_history.get_state()
-            self.model.eye_events, self.model.suggested_corrections, self.model.current_fixation, self.model.selected_fixation = fix8_state.get_state()
+            self.model.eye_events, self.model.suggested_corrections, self.model.current_fixation, self.model.selected_fixation, self.model.aoi, image_path = fix8_state.get_state()
+            if image_path is not None:
+                self.model.image_file_path = image_path
 
             # update progress bar
             self.ui.progress_bar.setMaximum(len(self.model.eye_events) - 1)
