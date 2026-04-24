@@ -26,19 +26,24 @@ class Fix8Visualizer {
             f.duration = Number(f.duration);
         });
         this.hoveredIndex = -1;
-        this._computeBounds();
         
         if (imageUrl) {
             this.bgImage = new Image();
             this.bgImage.onload = () => {
-                // Ensure canvas bounds can actually hold the image
-                this.canvas.width = Math.max(this.canvas.width, this.bgImage.width + 100);
-                this.canvas.height = Math.max(this.canvas.height, this.bgImage.height + 100);
+                // Lock the internal canvas matrix exactly to the innate resolution of the image.
+                // This eliminates scale tracking and creates a perfect 1:1 raw coordinate mapping.
+                this.canvas.width = this.bgImage.width;
+                this.canvas.height = this.bgImage.height;
+                
+                // Eradicate arbitrary padding; the stimulus image is the absolute frame of reference
+                this.offsetX = 0;
+                this.offsetY = 0;
                 this.draw();
             };
             this.bgImage.src = imageUrl;
         } else {
             this.bgImage = null;
+            this._computeBounds(); // arbitrary padding only when falling back to headless data
             this.draw();
         }
     }
@@ -82,7 +87,7 @@ class Fix8Visualizer {
         }
         
         if (this.bgImage && this.bgImage.complete) {
-            this.ctx.drawImage(this.bgImage, this.offsetX, this.offsetY);
+            this.ctx.drawImage(this.bgImage, 0, 0, this.canvas.width, this.canvas.height);
         }
         
         // Draw saccades (lines connecting fixations)
