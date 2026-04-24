@@ -148,6 +148,7 @@ def api_reset():
 @api_bp.route("/load_demo", methods=["POST"])
 def api_load_demo():
     engine = get_engine()
+    engine.reset_session_state()
     demo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static", "demo_data", "demo_trial.json"))
     if not os.path.exists(demo_path):
         return jsonify({"error": f"Demo file not found at {demo_path}"}), 404
