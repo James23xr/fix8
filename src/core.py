@@ -45,6 +45,25 @@ class Fix8Core:
         self.aoi_width = 7
         self.aoi_height = 4
 
+    def reset_session_state(self):
+        """Clear all mutable session state before loading a new trial.
+        Prevents stale AOIs, suggestions, undo history, and cursor positions
+        from bleeding across project loads."""
+        self.eye_events = None
+        self.current_fixation = -1
+        self.suggested_corrections = None
+        self.state_history = History()
+        self.aoi = None
+        self.selected_fixation = None
+        self.suggested_fixation = None
+        self.image_file_path = None
+        self.trial_path = None
+        self.trial_name = None
+        self.algorithm = "manual"
+        self.algorithm_function = None
+        self.secondary_algorithm_function = None
+        self.metadata = ""
+
     def previous_fixation(self):
         if self.current_fixation > 0:
             self.current_fixation -= 1

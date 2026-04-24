@@ -49,7 +49,8 @@ def load_project(project_id):
     import pandas as pd
     
     engine = get_engine()
-    
+    engine.reset_session_state()
+
     if project.is_demo:
         file_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'demo_data', 'demo_trial.json')
     else:
