@@ -136,6 +136,8 @@ class Fix8Core:
             self.suggested_corrections,
             self.current_fixation,
             self.selected_fixation,
+            aoi=self.aoi,
+            image_file_path=self.image_file_path,
         )
         self.state_history.set_state(current_state)
 
@@ -143,11 +145,14 @@ class Fix8Core:
         if self.state_history.is_empty():
             return False
         prev = self.state_history.get_state()
-        eye_events, suggested, cur, sel = prev.get_state()
+        eye_events, suggested, cur, sel, aoi, image_path = prev.get_state()
         self.eye_events = eye_events
         self.suggested_corrections = suggested
         self.current_fixation = cur
         self.selected_fixation = sel
+        self.aoi = aoi
+        if image_path is not None:
+            self.image_file_path = image_path
         return True
 
     def detect_aois(self, level="sub-line"):
