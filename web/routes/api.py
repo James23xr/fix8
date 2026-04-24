@@ -150,12 +150,12 @@ def api_render():
             durations = fixations['duration'].values
             
             # Saccades (lines) natively matched to Desktop Fix8 styles
-            ax.plot(x_coords, y_coords, color='rgba(56, 189, 248, 0.5)', linewidth=2, zorder=1)
+            ax.plot(x_coords, y_coords, color=(0.22, 0.74, 0.97, 0.5), linewidth=2, zorder=1)
             
             # Fixations (scatter points) natively matched to Desktop Fix8 styles
             # Matplotlib scatter 's' translates roughly to area. Desktop uses duration dynamically.
             sizes = [max(min(d / 10, 350), 30) for d in durations] 
-            ax.scatter(x_coords, y_coords, s=sizes, color='rgba(239, 68, 68, 0.65)', edgecolors='rgba(220, 38, 38, 0.9)', zorder=2)
+            ax.scatter(x_coords, y_coords, s=sizes, color=(0.94, 0.27, 0.27, 0.65), edgecolors=(0.86, 0.15, 0.15, 0.9), zorder=2)
             
             # Highlight current fixation if active
             if engine.current_fixation >= 0 and engine.current_fixation < len(x_coords):
