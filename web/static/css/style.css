@@ -298,6 +298,23 @@ input[type=range]::-webkit-slider-runnable-track {
   border-radius: 4px;
   max-width: 100%;
   height: auto;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+}
+
+#drag-ghost {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(240, 69, 69, 0.65);
+  border: 2px solid rgba(219, 38, 38, 0.9);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: none;
 }
 
 #empty-state {
