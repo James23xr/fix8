@@ -4,7 +4,8 @@
  *   - mapping mouse coords to image-space
  *   - detecting which fixation is being hovered
  *   - tooltip display
- *   - drag-and-drop to send updates via onFixationUpdate
+ *   - live drag preview via a DOM ghost dot
+ *   - drag-and-drop commit via onFixationUpdate (sent on mouseup)
  * Rendering refresh is owned by app.js.
  */
 class Fix8Visualizer {
@@ -12,6 +13,11 @@ class Fix8Visualizer {
         this.img = document.getElementById("engine-render");
         this.grid = document.getElementById("interactive-grid");
         this.tooltip = document.getElementById("tooltip");
+
+        // Create the ghost dot used for live drag preview
+        this.ghostDot = document.createElement("div");
+        this.ghostDot.id = "drag-ghost";
+        this.grid.appendChild(this.ghostDot);
 
         this.fixations = [];
         this.hoveredIndex = -1;
@@ -44,11 +50,20 @@ class Fix8Visualizer {
         };
     }
 
+    _positionGhost(e) {
+        const gridRect = this.grid.getBoundingClientRect();
+        this.ghostDot.style.left = (e.clientX - gridRect.left) + "px";
+        this.ghostDot.style.top = (e.clientY - gridRect.top) + "px";
+    }
+
     _setupEvents() {
-        this.grid.addEventListener("mousedown", () => {
+        this.grid.addEventListener("mousedown", (e) => {
             if (this.hoveredIndex !== -1) {
+                e.preventDefault(); // belt-and-suspenders: stop any residual native drag
                 this.isDragging = true;
                 this.draggedIndex = this.hoveredIndex;
+                this._positionGhost(e);
+                this.ghostDot.style.display = "block";
             }
         });
 
@@ -59,6 +74,7 @@ class Fix8Visualizer {
             if (this.isDragging && this.draggedIndex !== -1) {
                 this.fixations[this.draggedIndex].x_cord = pos.x;
                 this.fixations[this.draggedIndex].y_cord = pos.y;
+                this._positionGhost(e);
                 this.tooltip.style.opacity = "0";
                 this.grid.style.cursor = "grabbing";
                 return;
@@ -104,6 +120,7 @@ class Fix8Visualizer {
             }
             this.isDragging = false;
             this.draggedIndex = -1;
+            this.ghostDot.style.display = "none";
             this.grid.style.cursor = "crosshair";
         };
 
